@@ -8,6 +8,9 @@ import com.sirius.proxima.data.datastore.dataStore
 import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 
+import com.sirius.proxima.data.sis.SISScraper
+import com.sirius.proxima.data.sis.SisRepository
+
 object ServiceLocator {
 
     @Volatile
@@ -21,6 +24,9 @@ object ServiceLocator {
 
     @Volatile
     private var timetableRepository: TimetableRepository? = null
+
+    @Volatile
+    private var sisRepository: SisRepository? = null
 
     private fun getDatabase(context: Context): ProximaDatabase {
         return database ?: synchronized(this) {
@@ -55,6 +61,15 @@ object ServiceLocator {
             timetableRepository ?: TimetableRepository(
                 db.timetableEntryDao()
             ).also { timetableRepository = it }
+        }
+    }
+
+    fun getSisRepository(context: Context): SisRepository {
+        return sisRepository ?: synchronized(this) {
+            sisRepository ?: SisRepository(
+                SISScraper(),
+                getSettingsDataStore(context)
+            ).also { sisRepository = it }
         }
     }
 }

@@ -15,6 +15,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.sirius.proxima.ui.screen.HomeScreen
 import com.sirius.proxima.ui.screen.SettingsScreen
+import com.sirius.proxima.ui.screen.SisScreen
 import com.sirius.proxima.ui.screen.TimetableScreen
 import com.sirius.proxima.ui.theme.Border
 
@@ -80,6 +81,9 @@ fun ProximaNavGraph() {
             }
             composable(Screen.Timetable.route) {
                 TimetableScreen()
+            }
+            composable(Screen.Sis.route) {
+                SisScreen()
             }
             composable(Screen.Settings.route) {
                 SettingsScreen()
