@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -7,7 +9,7 @@ plugins {
 // Auto-incrementing versionCode — stored in version.properties, bumped on every build
 fun getVersionCode(): Int {
     val propsFile = rootProject.file("version.properties")
-    val props = java.util.Properties()
+    val props = Properties()
     if (propsFile.exists()) props.load(propsFile.inputStream())
     val code = (props.getProperty("VERSION_CODE")?.toIntOrNull() ?: 0) + 1
     props["VERSION_CODE"] = code.toString()
@@ -157,7 +159,7 @@ afterEvaluate {
                 return@doLast
             }
             val adb = "$sdkDir/platform-tools/adb"
-            println("📲 Installing ${apk.name} on connected device...")
+            println(" Installing ${apk.name} on connected device...")
             val proc = ProcessBuilder(adb, "install", "-r", "-d", apk.absolutePath)
                 .redirectErrorStream(true)
                 .start()
@@ -168,7 +170,7 @@ afterEvaluate {
                 println("✅ APK installed successfully.")
             } else {
                 // Signature mismatch — uninstall then re-install
-                println("🔄 Signature mismatch — uninstalling old version and retrying...")
+                println(" Signature mismatch — uninstalling old version and retrying...")
                 ProcessBuilder(adb, "uninstall", "com.sirius.proxima")
                     .redirectErrorStream(true).start().waitFor()
                 val proc2 = ProcessBuilder(adb, "install", "-r", "-d", apk.absolutePath)
@@ -182,4 +184,3 @@ afterEvaluate {
         }
     }
 }
-

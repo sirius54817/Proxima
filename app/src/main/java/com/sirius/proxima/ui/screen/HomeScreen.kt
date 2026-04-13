@@ -28,6 +28,7 @@ import com.sirius.proxima.viewmodel.HomeViewModel
 
 @Composable
 fun HomeScreen(
+    onNavigateToSubjectHistory: (Int) -> Unit,
     viewModel: HomeViewModel = viewModel(
         factory = HomeViewModel.factory(LocalContext.current.applicationContext as android.app.Application)
     )
@@ -66,8 +67,10 @@ fun HomeScreen(
             onGetPercentage = { viewModel.getSubjectPercentage(it) },
             onMarkPresent = { viewModel.markPresent(it) },
             onMarkAbsent = { viewModel.markAbsent(it) },
+            onMarkOnDuty = { viewModel.markOnDuty(it) },
             onEdit = { editingSubject = it },
-            onDelete = { deletingSubject = it }
+            onDelete = { deletingSubject = it },
+            onSubjectClick = { onNavigateToSubjectHistory(it.id) }
         )
     }
 
@@ -110,6 +113,7 @@ fun HomeScreen(
             onDismiss = { deletingSubject = null }
         )
     }
+
 }
 
 @Composable
@@ -121,8 +125,10 @@ fun HomeScreenContent(
     onGetPercentage: (Int?) -> Float,
     onMarkPresent: (Int) -> Unit,
     onMarkAbsent: (Int) -> Unit,
+    onMarkOnDuty: (Int) -> Unit,
     onEdit: (Subject) -> Unit,
-    onDelete: (Subject) -> Unit
+    onDelete: (Subject) -> Unit,
+    onSubjectClick: (Subject) -> Unit
 ) {
     LazyColumn(
         modifier = modifier
@@ -234,12 +240,15 @@ fun HomeScreenContent(
                     subject = subject,
                     onMarkPresent = { onMarkPresent(subject.id) },
                     onMarkAbsent = { onMarkAbsent(subject.id) },
-                    onEdit = { onEdit(subject) }
+                    onMarkOnDuty = { onMarkOnDuty(subject.id) },
+                    onEdit = { onEdit(subject) },
+                    onClick = { onSubjectClick(subject) }
                 )
             }
         }
     }
 }
+
 
 @Composable
 fun TodayEntryCard(
@@ -318,8 +327,10 @@ fun HomeScreenContentPreview() {
             onGetPercentage = { if (it == 1) 87.5f else if (it == 2) 62.5f else 93.3f },
             onMarkPresent = {},
             onMarkAbsent = {},
+            onMarkOnDuty = {},
             onEdit = {},
-            onDelete = {}
+            onDelete = {},
+            onSubjectClick = {}
         )
     }
 }

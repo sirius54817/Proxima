@@ -1,12 +1,14 @@
 package com.sirius.proxima.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.WorkHistory
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,14 +28,18 @@ fun SubjectCard(
     subject: Subject,
     onMarkPresent: () -> Unit,
     onMarkAbsent: () -> Unit,
+    onMarkOnDuty: () -> Unit,
     onEdit: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isAbove75 = subject.percentage >= 75f
     val percentColor = if (isAbove75) AttendanceGreen else AttendanceRed
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, Border),
         colors = CardDefaults.cardColors(
@@ -116,6 +122,25 @@ fun SubjectCard(
                 Spacer(modifier = Modifier.width(8.dp))
 
                 OutlinedButton(
+                    onClick = onMarkOnDuty,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, Border),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WorkHistory,
+                        contentDescription = "On Duty",
+                        tint = MutedForeground,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("On Duty", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                OutlinedButton(
                     onClick = onMarkAbsent,
                     shape = RoundedCornerShape(8.dp),
                     border = BorderStroke(1.dp, AttendanceRed.copy(alpha = 0.5f)),
@@ -149,7 +174,9 @@ fun SubjectCardPreview() {
             ),
             onMarkPresent = {},
             onMarkAbsent = {},
-            onEdit = {}
+            onMarkOnDuty = {},
+            onEdit = {},
+            onClick = {}
         )
     }
 }
@@ -167,7 +194,9 @@ fun SubjectCardLowAttendancePreview() {
             ),
             onMarkPresent = {},
             onMarkAbsent = {},
-            onEdit = {}
+            onMarkOnDuty = {},
+            onEdit = {},
+            onClick = {}
         )
     }
 }

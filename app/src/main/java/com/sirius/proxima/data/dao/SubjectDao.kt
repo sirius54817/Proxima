@@ -15,6 +15,9 @@ interface SubjectDao {
     @Query("SELECT * FROM subjects WHERE id = :id")
     suspend fun getSubjectById(id: Int): Subject?
 
+    @Query("SELECT * FROM subjects WHERE LOWER(name) = LOWER(:name) LIMIT 1")
+    suspend fun getSubjectByName(name: String): Subject?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSubject(subject: Subject): Long
 
@@ -29,6 +32,9 @@ interface SubjectDao {
 
     @Query("UPDATE subjects SET totalClasses = totalClasses + 1 WHERE id = :id")
     suspend fun markAbsent(id: Int)
+
+    @Query("UPDATE subjects SET attendedClasses = attendedClasses + 1, totalClasses = totalClasses + 1 WHERE id = :id")
+    suspend fun markOnDuty(id: Int)
 
     @Query("DELETE FROM subjects")
     suspend fun deleteAllSubjects()

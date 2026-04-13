@@ -21,6 +21,9 @@ sealed class Screen(
     object Timetable : Screen("timetable", "Timetable", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth)
     object Sis : Screen("sis", "SIS", Icons.Filled.School, Icons.Outlined.School)
     object Settings : Screen("settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    object SubjectHistory : Screen("subject_history/{subjectId}", "Subject History", Icons.Filled.Home, Icons.Outlined.Home) {
+        fun createRoute(subjectId: Int): String = "subject_history/$subjectId"
+    }
 }
 
 val bottomNavItems = listOf(Screen.Home, Screen.Timetable, Screen.Sis, Screen.Settings)

@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sirius.proxima.data.datastore.SettingsDataStore
+import com.sirius.proxima.data.model.AttendanceStatus
+import com.sirius.proxima.data.model.SubjectAttendanceRecord
+import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.sis.SisAttendance
 import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
@@ -24,8 +27,39 @@ sealed class SisUiState {
 class SisViewModel(
     application: Application,
     private val sisRepository: SisRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val subjectRepository: SubjectRepository
 ) : AndroidViewModel(application) {
+
+    private suspend fun syncSubjectHistoryFromSis(attendance: List<SisAttendance>) {
+        attendance.forEach { sisSubject ->
+            val subjectName = sisSubject.courseName.trim()
+            if (subjectName.isBlank()) return@forEach
+
+            val localSubject = subjectRepository.getSubjectByName(subjectName) ?: return@forEach
+            when (val historyResult = sisRepository.getSubjectAttendanceHistory(sisSubject.detailsUrl)) {
+                is SisResult.Success -> {
+                    val records = historyResult.data.mapNotNull { row ->
+                        val normalizedStatus = when (row.status) {
+                            AttendanceStatus.PRESENT -> AttendanceStatus.PRESENT
+                            AttendanceStatus.ABSENT -> AttendanceStatus.ABSENT
+                            AttendanceStatus.ON_DUTY -> AttendanceStatus.ON_DUTY
+                            else -> null
+                        } ?: return@mapNotNull null
+
+                        SubjectAttendanceRecord(
+                            subjectId = localSubject.id,
+                            status = normalizedStatus,
+                            date = row.date,
+                            slotName = row.slotName
+                        )
+                    }
+                    subjectRepository.insertAttendanceRecords(records)
+                }
+                is SisResult.Error -> Unit
+            }
+        }
+    }
 
     private val _uiState = MutableStateFlow<SisUiState>(SisUiState.LoggedOut)
     val uiState: StateFlow<SisUiState> = _uiState.asStateFlow()
@@ -66,7 +100,11 @@ class SisViewModel(
     private suspend fun fetchAttendance(registerNo: String, password: String) {
         _uiState.value = SisUiState.LoggingIn
         when (val result = sisRepository.loginAndFetch(registerNo, password)) {
-            is SisResult.Success -> _uiState.value = SisUiState.Loaded(result.data)
+            is SisResult.Success -> {
+                subjectRepository.syncSubjectsFromSis(result.data)
+                _uiState.value = SisUiState.Loaded(result.data)
+                syncSubjectHistoryFromSis(result.data)
+            }
             is SisResult.Error -> _uiState.value = SisUiState.Error(result.message)
         }
     }
@@ -75,7 +113,11 @@ class SisViewModel(
         viewModelScope.launch {
             _uiState.value = SisUiState.LoadingAttendance
             when (val result = sisRepository.getAttendance()) {
-                is SisResult.Success -> _uiState.value = SisUiState.Loaded(result.data)
+                is SisResult.Success -> {
+                    subjectRepository.syncSubjectsFromSis(result.data)
+                    _uiState.value = SisUiState.Loaded(result.data)
+                    syncSubjectHistoryFromSis(result.data)
+                }
                 is SisResult.Error -> {
                     // Session may have expired — re-login with saved credentials
                     val regNo = settingsDataStore.sisRegisterNo.first()
@@ -105,7 +147,8 @@ class SisViewModel(
                     return SisViewModel(
                         application,
                         ServiceLocator.getSisRepository(application),
-                        ServiceLocator.getSettingsDataStore(application)
+                        ServiceLocator.getSettingsDataStore(application),
+                        ServiceLocator.getSubjectRepository(application)
                     ) as T
                 }
             }

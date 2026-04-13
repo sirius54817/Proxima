@@ -23,8 +23,9 @@ class BackupWorker(
 
             val subjects = subjectRepository.getAllSubjectsList()
             val entries = timetableRepository.getAllEntriesList()
+            val attendanceHistory = subjectRepository.getAllAttendanceRecordsList()
 
-            val success = DriveBackupHelper.backup(applicationContext, subjects, entries)
+            val success = DriveBackupHelper.backup(applicationContext, subjects, entries, attendanceHistory)
             if (success) {
                 settingsDataStore.setLastBackupTime(System.currentTimeMillis())
                 Result.success()

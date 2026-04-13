@@ -22,6 +22,11 @@ class SisRepository(
             scraper.getAttendance()
         }
 
+    suspend fun getSubjectAttendanceHistory(detailsUrl: String): SisResult<List<SisAttendanceHistory>> =
+        withContext(Dispatchers.IO) {
+            scraper.getSubjectAttendanceHistory(detailsUrl)
+        }
+
     suspend fun loginAndFetch(registerNo: String, password: String): SisResult<List<SisAttendance>> =
         withContext(Dispatchers.IO) {
             val loginResult = scraper.login(registerNo, password)

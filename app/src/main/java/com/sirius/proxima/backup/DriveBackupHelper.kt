@@ -10,6 +10,7 @@ import com.google.api.services.drive.Drive
 import com.google.api.services.drive.DriveScopes
 import com.google.gson.Gson
 import com.sirius.proxima.data.model.Subject
+import com.sirius.proxima.data.model.SubjectAttendanceRecord
 import com.sirius.proxima.data.model.TimetableEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,8 @@ import java.io.ByteArrayOutputStream
 
 data class BackupData(
     val subjects: List<Subject>,
-    val timetableEntries: List<TimetableEntry>
+    val timetableEntries: List<TimetableEntry>,
+    val attendanceHistory: List<SubjectAttendanceRecord>? = null
 )
 
 object DriveBackupHelper {
@@ -39,11 +41,16 @@ object DriveBackupHelper {
         ).setApplicationName(APP_NAME).build()
     }
 
-    suspend fun backup(context: Context, subjects: List<Subject>, entries: List<TimetableEntry>): Boolean {
+    suspend fun backup(
+        context: Context,
+        subjects: List<Subject>,
+        entries: List<TimetableEntry>,
+        attendanceHistory: List<SubjectAttendanceRecord>
+    ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val driveService = getDriveService(context) ?: return@withContext false
-                val backupData = BackupData(subjects, entries)
+                val backupData = BackupData(subjects, entries, attendanceHistory)
                 val json = Gson().toJson(backupData)
 
                 // Check if backup file already exists
@@ -82,7 +89,8 @@ object DriveBackupHelper {
                 driveService.files().get(fileId).executeMediaAndDownloadTo(outputStream)
                 val json = outputStream.toString("UTF-8")
 
-                Gson().fromJson(json, BackupData::class.java)
+                val raw = Gson().fromJson(json, BackupData::class.java)
+                raw.copy(attendanceHistory = raw.attendanceHistory ?: emptyList())
             } catch (e: Exception) {
                 e.printStackTrace()
                 null

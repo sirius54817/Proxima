@@ -374,6 +374,8 @@ private fun SisAttendanceCard(subject: SisAttendance) {
     val percentage = subject.percentage
     val isBelow = percentage < 75.0
     val percentColor = if (percentage >= 75.0) AttendanceGreen else AttendanceRed
+    // SIS treats OD as attended classes for eligibility calculations.
+    val effectivePresent = subject.present + subject.onDuty
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -445,14 +447,14 @@ private fun SisAttendanceCard(subject: SisAttendance) {
             // Warning / info message
             if (isBelow) {
                 Spacer(modifier = Modifier.height(8.dp))
-                val needed = Math.ceil((0.75 * subject.total - subject.present) / 0.25).toInt()
+                val needed = Math.ceil((0.75 * subject.total - effectivePresent) / 0.25).toInt().coerceAtLeast(0)
                 Text(
                     text = "⚠ Need $needed more class${if (needed == 1) "" else "es"} to reach 75%",
                     style = MaterialTheme.typography.bodySmall,
                     color = DangerRed
                 )
             } else if (percentage >= 75.0) {
-                val canMiss = ((subject.present - 0.75 * subject.total) / 0.75).toInt()
+                val canMiss = ((effectivePresent - 0.75 * subject.total) / 0.75).toInt().coerceAtLeast(0)
                 if (canMiss > 0) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -473,5 +475,4 @@ private fun AttendanceStat(label: String, value: String, color: androidx.compose
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MutedForeground)
     }
 }
-
 

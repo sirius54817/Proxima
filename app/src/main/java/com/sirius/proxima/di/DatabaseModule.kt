@@ -50,7 +50,9 @@ object ServiceLocator {
         return subjectRepository ?: synchronized(this) {
             val db = getDatabase(context)
             subjectRepository ?: SubjectRepository(
-                db.subjectDao(), db.timetableEntryDao()
+                db.subjectDao(),
+                db.timetableEntryDao(),
+                db.subjectAttendanceRecordDao()
             ).also { subjectRepository = it }
         }
     }

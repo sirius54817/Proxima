@@ -1,8 +1,12 @@
 package com.sirius.proxima.ui.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -42,9 +47,47 @@ fun SettingsScreen(
     val isSignedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val isBackingUp by viewModel.isBackingUp.collectAsStateWithLifecycle()
     val isClearing by viewModel.isClearing.collectAsStateWithLifecycle()
+    val sisFeaturesUnlocked by viewModel.sisFeaturesUnlocked.collectAsStateWithLifecycle()
+    val unlockMessage by viewModel.unlockMessage.collectAsStateWithLifecycle()
+    val showSpecialModePopup by viewModel.showSpecialModePopup.collectAsStateWithLifecycle()
+    val selectedCalendarName by viewModel.selectedCalendarName.collectAsStateWithLifecycle()
+    val isSyncingToCalendar by viewModel.isSyncingToCalendar.collectAsStateWithLifecycle()
+    val isSyncingFromCalendar by viewModel.isSyncingFromCalendar.collectAsStateWithLifecycle()
+    val isClearingCalendar by viewModel.isClearingCalendar.collectAsStateWithLifecycle()
+    val calendarSyncMessage by viewModel.calendarSyncMessage.collectAsStateWithLifecycle()
+
+    LaunchedEffect(unlockMessage) {
+        val message = unlockMessage ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        viewModel.clearUnlockMessage()
+    }
 
     var showClearDialog by remember { mutableStateOf(false) }
+    var showClearCalendarDialog by remember { mutableStateOf(false) }
     var signInError by remember { mutableStateOf<String?>(null) }
+    var hasCalendarPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val readGranted = permissions[Manifest.permission.READ_CALENDAR] == true
+        val writeGranted = permissions[Manifest.permission.WRITE_CALENDAR] == true
+        hasCalendarPermission = readGranted && writeGranted
+        if (!hasCalendarPermission) {
+            Toast.makeText(context, "Calendar permission is required for sync", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(calendarSyncMessage) {
+        val message = calendarSyncMessage ?: return@LaunchedEffect
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        viewModel.clearCalendarSyncMessage()
+    }
 
     val signInLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -118,7 +161,26 @@ fun SettingsScreen(
         onClearData = { showClearDialog = true },
         onTestNotification = {
             com.sirius.proxima.notification.NotificationHelper.sendDemoNotification(context)
-        }
+        },
+        sisFeaturesUnlocked = sisFeaturesUnlocked,
+        onVersionTapped = { viewModel.onVersionTapped() },
+        selectedCalendarName = selectedCalendarName,
+        isSyncingToCalendar = isSyncingToCalendar,
+        isSyncingFromCalendar = isSyncingFromCalendar,
+        isClearingCalendar = isClearingCalendar,
+        onSyncToCalendar = {
+            if (hasCalendarPermission) viewModel.syncTimetableToGoogleCalendar()
+            else calendarPermissionLauncher.launch(
+                arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+            )
+        },
+        onSyncFromCalendar = {
+            if (hasCalendarPermission) viewModel.syncFromGoogleCalendar()
+            else calendarPermissionLauncher.launch(
+                arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+            )
+        },
+        onClearCalendarData = { showClearCalendarDialog = true }
     )
 
     if (showClearDialog) {
@@ -132,6 +194,36 @@ fun SettingsScreen(
                 showClearDialog = false
             },
             onDismiss = { showClearDialog = false }
+        )
+    }
+
+    if (showSpecialModePopup) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissSpecialModePopup() },
+            title = { Text("Special Mode") },
+            text = { Text("Active in special mode") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissSpecialModePopup() }) {
+                    Text("Nice")
+                }
+            }
+        )
+    }
+
+    if (showClearCalendarDialog) {
+        ConfirmDialog(
+            title = "Clear App Calendar Data",
+            message = "This removes only events created by Proxima from Google Calendar.",
+            confirmText = "Clear Calendar Data",
+            isDangerous = true,
+            onConfirm = {
+                if (hasCalendarPermission) viewModel.clearAppCalendarDataOnly()
+                else calendarPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
+                )
+                showClearCalendarDialog = false
+            },
+            onDismiss = { showClearCalendarDialog = false }
         )
     }
 }
@@ -149,7 +241,16 @@ fun SettingsScreenContent(
     onSignOut: () -> Unit = {},
     onBackupNow: () -> Unit = {},
     onClearData: () -> Unit = {},
-    onTestNotification: () -> Unit = {}
+    onTestNotification: () -> Unit = {},
+    sisFeaturesUnlocked: Boolean = false,
+    onVersionTapped: () -> Unit = {},
+    selectedCalendarName: String? = null,
+    isSyncingToCalendar: Boolean = false,
+    isSyncingFromCalendar: Boolean = false,
+    isClearingCalendar: Boolean = false,
+    onSyncToCalendar: () -> Unit = {},
+    onSyncFromCalendar: () -> Unit = {},
+    onClearCalendarData: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -406,6 +507,71 @@ fun SettingsScreenContent(
             }
         }
 
+        // Google Calendar Sync Section
+        item {
+            Text(
+                text = "Google Calendar Sync",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Border),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Selected: ${selectedCalendarName ?: "Auto-detect Google Calendar"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MutedForeground
+                    )
+                    OutlinedButton(
+                        onClick = onSyncToCalendar,
+                        enabled = !isSyncingToCalendar && !isSyncingFromCalendar,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Border),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSyncingToCalendar) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Syncing to Calendar...")
+                        } else {
+                            Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sync Timetable to Google Calendar")
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onSyncFromCalendar,
+                        enabled = !isSyncingFromCalendar && !isSyncingToCalendar,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Border),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isSyncingFromCalendar) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Syncing from Calendar...")
+                        } else {
+                            Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sync from Google Calendar")
+                        }
+                    }
+                }
+            }
+        }
+
         // About Section
         item {
             Text(
@@ -441,11 +607,16 @@ fun SettingsScreenContent(
                         Text(
                             text = "v1.0.0",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MutedForeground
+                            color = if (sisFeaturesUnlocked) AttendanceGreen else MutedForeground,
+                            modifier = Modifier.clickable { onVersionTapped() }
                         )
                     }
                     Text(
-                        text = "Attendance tracker & class scheduler",
+                        text = if (sisFeaturesUnlocked) {
+                            "Attendance tracker, class scheduler, SIS enabled"
+                        } else {
+                            "Attendance tracker & class scheduler"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MutedForeground
                     )
@@ -486,6 +657,36 @@ fun SettingsScreenContent(
                         color = MutedForeground
                     )
                     Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onClearCalendarData,
+                        enabled = !isClearingCalendar,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = DangerRed.copy(alpha = 0.85f)
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isClearingCalendar) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onError
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Clearing Calendar...")
+                        } else {
+                            Icon(
+                                Icons.Default.EventBusy,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Clear App Calendar Data")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     Button(
                         onClick = onClearData,
                         enabled = !isClearing,

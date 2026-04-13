@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sirius.proxima.backup.DriveBackupHelper
+import com.sirius.proxima.data.calendar.CalendarSyncHelper
 import com.sirius.proxima.data.datastore.SettingsDataStore
+import com.sirius.proxima.data.model.TimetableEntry
 import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 import com.sirius.proxima.di.ServiceLocator
@@ -22,6 +24,11 @@ class SettingsViewModel(
     private val timetableRepository: TimetableRepository
 ) : AndroidViewModel(application) {
 
+    private var versionTapCount = 0
+    private var relockTapCount = 0
+    private var lastRelockTapAt = 0L
+    private val unlockTapTarget = 10
+
     val googleAccountName: StateFlow<String?> = settingsDataStore.googleAccountName
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -34,11 +41,192 @@ class SettingsViewModel(
     val isSignedIn: StateFlow<Boolean> = settingsDataStore.isSignedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val selectedCalendarName: StateFlow<String?> = settingsDataStore.googleCalendarName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val sisFeaturesUnlocked: StateFlow<Boolean> = settingsDataStore.sisFeaturesUnlocked
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _isBackingUp = MutableStateFlow(false)
     val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
 
     private val _isClearing = MutableStateFlow(false)
     val isClearing: StateFlow<Boolean> = _isClearing.asStateFlow()
+
+    private val _unlockMessage = MutableStateFlow<String?>(null)
+    val unlockMessage: StateFlow<String?> = _unlockMessage.asStateFlow()
+
+    private val _showSpecialModePopup = MutableStateFlow(false)
+    val showSpecialModePopup: StateFlow<Boolean> = _showSpecialModePopup.asStateFlow()
+
+    private val _isSyncingToCalendar = MutableStateFlow(false)
+    val isSyncingToCalendar: StateFlow<Boolean> = _isSyncingToCalendar.asStateFlow()
+
+    private val _isSyncingFromCalendar = MutableStateFlow(false)
+    val isSyncingFromCalendar: StateFlow<Boolean> = _isSyncingFromCalendar.asStateFlow()
+
+    private val _isClearingCalendar = MutableStateFlow(false)
+    val isClearingCalendar: StateFlow<Boolean> = _isClearingCalendar.asStateFlow()
+
+    private val _calendarSyncMessage = MutableStateFlow<String?>(null)
+    val calendarSyncMessage: StateFlow<String?> = _calendarSyncMessage.asStateFlow()
+
+    fun onVersionTapped() {
+        viewModelScope.launch {
+            if (sisFeaturesUnlocked.value) {
+                val now = System.currentTimeMillis()
+                if (now - lastRelockTapAt > 1500L) {
+                    relockTapCount = 0
+                }
+                lastRelockTapAt = now
+                relockTapCount += 1
+
+                if (relockTapCount >= 2) {
+                    settingsDataStore.setSisFeaturesUnlocked(false)
+                    relockTapCount = 0
+                    versionTapCount = 0
+                    _unlockMessage.value = "Leaving so soon? Special mode disabled"
+                } else {
+                    _unlockMessage.value = null
+                }
+                return@launch
+            }
+
+            relockTapCount = 0
+            versionTapCount += 1
+
+            when (versionTapCount) {
+                3 -> _unlockMessage.value = "3 taps... the app is blushing already"
+                5 -> _unlockMessage.value = "5 taps... secret agents would be proud"
+                9 -> _unlockMessage.value = "9 taps... one more and we enter hyperspace"
+                in 1 until unlockTapTarget -> _unlockMessage.value = null
+                else -> {
+                    settingsDataStore.setSisFeaturesUnlocked(true)
+                    versionTapCount = 0
+                    _unlockMessage.value = "SIS features enabled"
+                    _showSpecialModePopup.value = true
+                }
+            }
+        }
+    }
+
+    fun clearUnlockMessage() {
+        _unlockMessage.value = null
+    }
+
+    fun dismissSpecialModePopup() {
+        _showSpecialModePopup.value = false
+    }
+
+    fun clearCalendarSyncMessage() {
+        _calendarSyncMessage.value = null
+    }
+
+    fun syncTimetableToGoogleCalendar() {
+        viewModelScope.launch {
+            _isSyncingToCalendar.value = true
+            try {
+                val calendar = resolveCalendarSelection() ?: run {
+                    _calendarSyncMessage.value = "No writable Google Calendar found"
+                    return@launch
+                }
+
+                val entries = timetableRepository.getAllEntriesList()
+                val stats = CalendarSyncHelper.syncToCalendar(
+                    context = getApplication(),
+                    calendarId = calendar.first,
+                    calendarName = calendar.second,
+                    entries = entries
+                )
+
+                settingsDataStore.setGoogleCalendar(stats.calendarId, stats.calendarName)
+                _calendarSyncMessage.value = "Synced ${stats.upserted} classes to ${stats.calendarName}"
+            } catch (e: Exception) {
+                _calendarSyncMessage.value = "Calendar sync failed: ${e.message ?: "Unknown error"}"
+            } finally {
+                _isSyncingToCalendar.value = false
+            }
+        }
+    }
+
+    fun syncFromGoogleCalendar() {
+        viewModelScope.launch {
+            _isSyncingFromCalendar.value = true
+            try {
+                val calendar = resolveCalendarSelection() ?: run {
+                    _calendarSyncMessage.value = "No writable Google Calendar found"
+                    return@launch
+                }
+
+                val snapshots = CalendarSyncHelper.loadAppEventsFromCalendar(getApplication(), calendar.first)
+                val subjectByName = subjectRepository.getAllSubjectsList()
+                    .associateBy { it.name.trim().lowercase() }
+
+                snapshots.forEach { event ->
+                    val matchedSubject = subjectByName[event.subjectName.trim().lowercase()]
+                    val existing = timetableRepository.getEntryBySlot(event.dayOfWeek, event.hourSlot)
+
+                    if (existing == null) {
+                        timetableRepository.insertEntry(
+                            TimetableEntry(
+                                dayOfWeek = event.dayOfWeek,
+                                hourSlot = event.hourSlot,
+                                subjectId = matchedSubject?.id,
+                                subjectName = matchedSubject?.name ?: event.subjectName,
+                                classNumber = event.classNumber
+                            )
+                        )
+                    } else {
+                        timetableRepository.updateEntry(
+                            existing.copy(
+                                subjectId = matchedSubject?.id,
+                                subjectName = matchedSubject?.name ?: event.subjectName,
+                                classNumber = event.classNumber
+                            )
+                        )
+                    }
+                }
+
+                settingsDataStore.setGoogleCalendar(calendar.first, calendar.second)
+                _calendarSyncMessage.value = "Imported ${snapshots.size} classes from ${calendar.second}"
+            } catch (e: Exception) {
+                _calendarSyncMessage.value = "Calendar import failed: ${e.message ?: "Unknown error"}"
+            } finally {
+                _isSyncingFromCalendar.value = false
+            }
+        }
+    }
+
+    fun clearAppCalendarDataOnly() {
+        viewModelScope.launch {
+            _isClearingCalendar.value = true
+            try {
+                val calendar = resolveCalendarSelection() ?: run {
+                    _calendarSyncMessage.value = "No Google Calendar selected"
+                    return@launch
+                }
+
+                val deleted = CalendarSyncHelper.clearAppEvents(getApplication(), calendar.first)
+                _calendarSyncMessage.value = "Cleared $deleted app-created events from ${calendar.second}"
+            } catch (e: Exception) {
+                _calendarSyncMessage.value = "Calendar clear failed: ${e.message ?: "Unknown error"}"
+            } finally {
+                _isClearingCalendar.value = false
+            }
+        }
+    }
+
+    private suspend fun resolveCalendarSelection(): Pair<Long, String>? {
+        val savedId = settingsDataStore.googleCalendarId.first()
+        val savedName = settingsDataStore.googleCalendarName.first()
+        if (savedId != null && !savedName.isNullOrBlank()) {
+            return savedId to savedName
+        }
+
+        val detected = CalendarSyncHelper.findWritableGoogleCalendar(getApplication()) ?: return null
+        settingsDataStore.setGoogleCalendar(detected.first, detected.second)
+        return detected
+    }
 
     fun onSignInSuccess(name: String, email: String) {
         viewModelScope.launch {
@@ -62,7 +250,8 @@ class SettingsViewModel(
             try {
                 val subjects = subjectRepository.getAllSubjectsList()
                 val entries = timetableRepository.getAllEntriesList()
-                val success = DriveBackupHelper.backup(getApplication(), subjects, entries)
+                val attendanceHistory = subjectRepository.getAllAttendanceRecordsList()
+                val success = DriveBackupHelper.backup(getApplication(), subjects, entries, attendanceHistory)
                 if (success) {
                     settingsDataStore.setLastBackupTime(System.currentTimeMillis())
                 }
@@ -80,12 +269,21 @@ class SettingsViewModel(
             // Only restore if local db is empty
             val localSubjects = subjectRepository.getAllSubjectsList()
             if (localSubjects.isEmpty()) {
+                val oldToNewSubjectIds = mutableMapOf<Int, Int>()
                 backupData.subjects.forEach { subject ->
-                    subjectRepository.insertSubject(subject.copy(id = 0))
+                    val newId = subjectRepository.insertSubject(subject.copy(id = 0)).toInt()
+                    oldToNewSubjectIds[subject.id] = newId
                 }
                 backupData.timetableEntries.forEach { entry ->
-                    timetableRepository.insertEntry(entry.copy(id = 0))
+                    val mappedSubjectId = entry.subjectId?.let { oldToNewSubjectIds[it] }
+                    timetableRepository.insertEntry(entry.copy(id = 0, subjectId = mappedSubjectId))
                 }
+
+                val mappedHistory = (backupData.attendanceHistory ?: emptyList()).mapNotNull { record ->
+                    val mappedSubjectId = oldToNewSubjectIds[record.subjectId] ?: return@mapNotNull null
+                    record.copy(id = 0, subjectId = mappedSubjectId)
+                }
+                subjectRepository.insertAttendanceRecords(mappedHistory)
             }
         } catch (e: Exception) {
             e.printStackTrace()

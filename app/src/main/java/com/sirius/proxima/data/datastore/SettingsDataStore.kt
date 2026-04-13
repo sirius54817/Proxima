@@ -20,6 +20,9 @@ class SettingsDataStore(
         val SIS_REGISTER_NO = stringPreferencesKey("sis_register_no")
         val SIS_PASSWORD = stringPreferencesKey("sis_password")
         val SIS_LOGGED_IN = booleanPreferencesKey("sis_logged_in")
+        val SIS_FEATURES_UNLOCKED = booleanPreferencesKey("sis_features_unlocked")
+        val GOOGLE_CALENDAR_ID = longPreferencesKey("google_calendar_id")
+        val GOOGLE_CALENDAR_NAME = stringPreferencesKey("google_calendar_name")
     }
 
     val googleAccountName: Flow<String?> = dataStore.data.map { it[GOOGLE_ACCOUNT_NAME] }
@@ -29,6 +32,9 @@ class SettingsDataStore(
     val sisRegisterNo: Flow<String?> = dataStore.data.map { it[SIS_REGISTER_NO] }
     val sisPassword: Flow<String?> = dataStore.data.map { it[SIS_PASSWORD] }
     val sisLoggedIn: Flow<Boolean> = dataStore.data.map { it[SIS_LOGGED_IN] ?: false }
+    val sisFeaturesUnlocked: Flow<Boolean> = dataStore.data.map { it[SIS_FEATURES_UNLOCKED] ?: false }
+    val googleCalendarId: Flow<Long?> = dataStore.data.map { it[GOOGLE_CALENDAR_ID] }
+    val googleCalendarName: Flow<String?> = dataStore.data.map { it[GOOGLE_CALENDAR_NAME] }
 
     suspend fun setSisCredentials(registerNo: String, password: String) {
         dataStore.edit {
@@ -43,6 +49,26 @@ class SettingsDataStore(
             it.remove(SIS_REGISTER_NO)
             it.remove(SIS_PASSWORD)
             it[SIS_LOGGED_IN] = false
+        }
+    }
+
+    suspend fun setSisFeaturesUnlocked(unlocked: Boolean) {
+        dataStore.edit {
+            it[SIS_FEATURES_UNLOCKED] = unlocked
+        }
+    }
+
+    suspend fun setGoogleCalendar(calendarId: Long, calendarName: String) {
+        dataStore.edit {
+            it[GOOGLE_CALENDAR_ID] = calendarId
+            it[GOOGLE_CALENDAR_NAME] = calendarName
+        }
+    }
+
+    suspend fun clearGoogleCalendar() {
+        dataStore.edit {
+            it.remove(GOOGLE_CALENDAR_ID)
+            it.remove(GOOGLE_CALENDAR_NAME)
         }
     }
 
