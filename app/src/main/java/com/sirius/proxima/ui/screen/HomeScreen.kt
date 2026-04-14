@@ -1,6 +1,8 @@
 package com.sirius.proxima.ui.screen
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.platform.LocalContext
+import com.sirius.proxima.data.model.PlannerEventType
 import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.data.model.TimetableEntry
 import com.sirius.proxima.ui.components.AddEditSubjectDialog
@@ -36,6 +39,18 @@ fun HomeScreen(
     val subjects by viewModel.subjects.collectAsStateWithLifecycle()
     val todayEntries by viewModel.todayEntries.collectAsStateWithLifecycle()
     val todayFormatted by viewModel.todayFormatted.collectAsStateWithLifecycle()
+    val examCountdowns by viewModel.examCountdowns.collectAsStateWithLifecycle()
+    val semesterProgress by viewModel.semesterProgress.collectAsStateWithLifecycle()
+    val weekOverview by viewModel.weekOverview.collectAsStateWithLifecycle()
+    val semesterStartDate by viewModel.semesterStartDate.collectAsStateWithLifecycle()
+    val semesterEndDate by viewModel.semesterEndDate.collectAsStateWithLifecycle()
+    val showSemesterProgressCard by viewModel.showSemesterProgressCard.collectAsStateWithLifecycle()
+    val showExamCountdownCard by viewModel.showExamCountdownCard.collectAsStateWithLifecycle()
+    val showWeekOverviewCard by viewModel.showWeekOverviewCard.collectAsStateWithLifecycle()
+    val showWeeklyGoalProgress by viewModel.showWeeklyGoalProgress.collectAsStateWithLifecycle()
+    val tomorrowHolidayText by viewModel.tomorrowHolidayText.collectAsStateWithLifecycle()
+    val weeklyGoalMinutes by viewModel.weeklyGoalMinutes.collectAsStateWithLifecycle()
+    val weeklyStudiedMinutes by viewModel.weeklyStudiedMinutes.collectAsStateWithLifecycle()
 
     // Refresh date when screen is displayed
     LaunchedEffect(Unit) {
@@ -45,6 +60,7 @@ fun HomeScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingSubject by remember { mutableStateOf<Subject?>(null) }
     var deletingSubject by remember { mutableStateOf<Subject?>(null) }
+    var showCustomEventDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -70,7 +86,22 @@ fun HomeScreen(
             onMarkOnDuty = { viewModel.markOnDuty(it) },
             onEdit = { editingSubject = it },
             onDelete = { deletingSubject = it },
-            onSubjectClick = { onNavigateToSubjectHistory(it.id) }
+            onSubjectClick = { onNavigateToSubjectHistory(it.id) },
+            examCountdowns = examCountdowns,
+            semesterProgress = semesterProgress,
+            weekOverview = weekOverview,
+            onAddCustomEvent = { showCustomEventDialog = true },
+            onDeleteCustomEvent = { it.plannerEvent?.let(viewModel::deleteCustomEvent) },
+            semesterStartDate = semesterStartDate,
+            semesterEndDate = semesterEndDate,
+            showSemesterProgressCard = showSemesterProgressCard,
+            showExamCountdownCard = showExamCountdownCard,
+            showWeekOverviewCard = showWeekOverviewCard,
+            showWeeklyGoalProgress = showWeeklyGoalProgress,
+            tomorrowHolidayText = tomorrowHolidayText,
+            weeklyGoalMinutes = weeklyGoalMinutes,
+            weeklyStudiedMinutes = weeklyStudiedMinutes,
+            onSetSemesterDates = viewModel::setSemesterDates
         )
     }
 
@@ -114,6 +145,16 @@ fun HomeScreen(
         )
     }
 
+    if (showCustomEventDialog) {
+        AddCustomEventDialog(
+            onDismiss = { showCustomEventDialog = false },
+            onSave = { title, date, type ->
+                viewModel.addCustomEvent(title, date, type)
+                showCustomEventDialog = false
+            }
+        )
+    }
+
 }
 
 @Composable
@@ -128,8 +169,25 @@ fun HomeScreenContent(
     onMarkOnDuty: (Int) -> Unit,
     onEdit: (Subject) -> Unit,
     onDelete: (Subject) -> Unit,
-    onSubjectClick: (Subject) -> Unit
+    onSubjectClick: (Subject) -> Unit,
+    examCountdowns: List<HomeViewModel.ExamCountdownItem>,
+    semesterProgress: Float,
+    weekOverview: List<HomeViewModel.HomeWeekEvent>,
+    onAddCustomEvent: () -> Unit,
+    onDeleteCustomEvent: (HomeViewModel.HomeWeekEvent) -> Unit,
+    semesterStartDate: String,
+    semesterEndDate: String,
+    showSemesterProgressCard: Boolean,
+    showExamCountdownCard: Boolean,
+    showWeekOverviewCard: Boolean,
+    showWeeklyGoalProgress: Boolean,
+    tomorrowHolidayText: String?,
+    weeklyGoalMinutes: Int,
+    weeklyStudiedMinutes: Long,
+    onSetSemesterDates: (String, String) -> Unit
 ) {
+    var showSemesterDateDialog by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -139,19 +197,113 @@ fun HomeScreenContent(
     ) {
         // Header
         item {
-            Text(
-                text = "Proxima",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column {
+                    val examCountdownText = examCountdowns
+                        .minByOrNull { it.daysRemaining }
+                        ?.let { "Exam: ${it.subject} in ${it.daysRemaining} day(s) (${it.examDate})" }
+                    val weekOverviewText = weekOverview
+                        .sortedBy { it.date }
+                        .firstOrNull()
+                        ?.let { "Week: ${it.date} - ${it.title}" }
+
+                    Text(
+                        text = "Proxima",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = todayFormatted,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MutedForeground
+                    )
+                    if (!tomorrowHolidayText.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = tomorrowHolidayText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AttendanceGreen
+                        )
+                    }
+                    if (showExamCountdownCard && !examCountdownText.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = examCountdownText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AttendanceRed
+                        )
+                    }
+                    if (showWeekOverviewCard && !weekOverviewText.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = weekOverviewText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                    if (showSemesterProgressCard) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Column(modifier = Modifier.clickable { showSemesterDateDialog = true }) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Semester", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    "${(semesterProgress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MutedForeground
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { semesterProgress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Semester progress based on your selected start/end dates",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedForeground
+                            )
+                        }
+                    }
+                    if (showWeeklyGoalProgress) {
+                        val weeklyProgress = (weeklyStudiedMinutes.toFloat() / weeklyGoalMinutes.toFloat()).coerceIn(0f, 1f)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Weekly goal", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    "${weeklyStudiedMinutes / 60}h ${(weeklyStudiedMinutes % 60)}m / ${weeklyGoalMinutes / 60}h",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MutedForeground
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { weeklyProgress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "This progress bar shows your weekly goal progress",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedForeground
+                            )
+                        }
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = todayFormatted,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MutedForeground
-            )
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         // Today's Timetable Section
@@ -247,6 +399,42 @@ fun HomeScreenContent(
             }
         }
     }
+
+    if (showSemesterDateDialog) {
+        var startDate by remember(semesterStartDate) { mutableStateOf(semesterStartDate.ifBlank { java.time.LocalDate.now().withMonth(1).withDayOfMonth(1).toString() }) }
+        var endDate by remember(semesterEndDate) { mutableStateOf(semesterEndDate.ifBlank { java.time.LocalDate.now().withMonth(6).withDayOfMonth(30).toString() }) }
+        AlertDialog(
+            onDismissRequest = { showSemesterDateDialog = false },
+            title = { Text("Semester dates") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = startDate,
+                        onValueChange = { startDate = it },
+                        label = { Text("Start (YYYY-MM-DD)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = endDate,
+                        onValueChange = { endDate = it },
+                        label = { Text("End (YYYY-MM-DD)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onSetSemesterDates(startDate, endDate)
+                    showSemesterDateDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSemesterDateDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 
@@ -309,6 +497,76 @@ fun TodayEntryCard(
     }
 }
 
+@Composable
+private fun WeekEventRow(
+    event: HomeViewModel.HomeWeekEvent,
+    onDelete: () -> Unit
+) {
+    val typeColor = when (event.type) {
+        PlannerEventType.ASSIGNMENT -> AttendanceBlue
+        PlannerEventType.EXAM -> AttendanceRed
+        PlannerEventType.HOLIDAY -> AttendanceGreen
+        PlannerEventType.INTERNAL -> MaterialTheme.colorScheme.tertiary
+        else -> MutedForeground
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(typeColor, RoundedCornerShape(10.dp))
+            )
+            Column {
+                Text(event.title, style = MaterialTheme.typography.bodySmall)
+                Text("${event.date} - ${event.type}", style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+            }
+        }
+        if (event.plannerEvent != null) {
+            TextButton(onClick = onDelete) { Text("Del") }
+        }
+    }
+}
+
+@Composable
+private fun AddCustomEventDialog(
+    onDismiss: () -> Unit,
+    onSave: (title: String, date: String, type: String) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var date by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
+    var type by remember { mutableStateOf(PlannerEventType.INTERNAL) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add Custom Event") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        PlannerEventType.ASSIGNMENT,
+                        PlannerEventType.EXAM,
+                        PlannerEventType.HOLIDAY,
+                        PlannerEventType.INTERNAL
+                    ).forEach { option ->
+                        OutlinedButton(onClick = { type = option }) {
+                            Text(if (option == type) "$option *" else option)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(title, date, type) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
 @Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
 @Composable
 fun HomeScreenContentPreview() {
@@ -330,7 +588,28 @@ fun HomeScreenContentPreview() {
             onMarkOnDuty = {},
             onEdit = {},
             onDelete = {},
-            onSubjectClick = {}
+            onSubjectClick = {},
+            examCountdowns = listOf(
+                HomeViewModel.ExamCountdownItem(1, "Math", "2026-04-18", 5),
+                HomeViewModel.ExamCountdownItem(2, "Physics", "2026-04-22", 9)
+            ),
+            semesterProgress = 0.52f,
+            weekOverview = listOf(
+                HomeViewModel.HomeWeekEvent("p_1", "Internal Viva", "2026-04-15", PlannerEventType.INTERNAL),
+                HomeViewModel.HomeWeekEvent("p_2", "Holiday", "2026-04-17", PlannerEventType.HOLIDAY)
+            ),
+            onAddCustomEvent = {},
+            onDeleteCustomEvent = {},
+            semesterStartDate = "2026-01-10",
+            semesterEndDate = "2026-05-20",
+            showSemesterProgressCard = true,
+            showExamCountdownCard = true,
+            showWeekOverviewCard = true,
+            showWeeklyGoalProgress = true,
+            tomorrowHolidayText = "Tomorrow holiday: Monday, 2026-04-14 - Tamil New Year",
+            weeklyGoalMinutes = 600,
+            weeklyStudiedMinutes = 220,
+            onSetSemesterDates = { _, _ -> }
         )
     }
 }

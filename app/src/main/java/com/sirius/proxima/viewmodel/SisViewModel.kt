@@ -12,6 +12,7 @@ import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.sis.SisAttendance
 import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
+import com.sirius.proxima.data.sis.SIS_NETWORK_UNAVAILABLE
 import com.sirius.proxima.di.ServiceLocator
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -105,7 +106,7 @@ class SisViewModel(
                 _uiState.value = SisUiState.Loaded(result.data)
                 syncSubjectHistoryFromSis(result.data)
             }
-            is SisResult.Error -> _uiState.value = SisUiState.Error(result.message)
+            is SisResult.Error -> _uiState.value = SisUiState.Error(mapSisErrorMessage(result.message))
         }
     }
 
@@ -125,11 +126,16 @@ class SisViewModel(
                     if (regNo != null && password != null) {
                         fetchAttendance(regNo, password)
                     } else {
-                        _uiState.value = SisUiState.Error(result.message)
+                        _uiState.value = SisUiState.Error(mapSisErrorMessage(result.message))
                     }
                 }
             }
         }
+    }
+
+    private fun mapSisErrorMessage(rawMessage: String): String {
+        if (!rawMessage.startsWith("$SIS_NETWORK_UNAVAILABLE:")) return rawMessage
+        return rawMessage.removePrefix("$SIS_NETWORK_UNAVAILABLE:").ifBlank { rawMessage }
     }
 
     fun logout() {

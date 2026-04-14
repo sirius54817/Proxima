@@ -48,6 +48,7 @@ fun SettingsScreen(
     val isBackingUp by viewModel.isBackingUp.collectAsStateWithLifecycle()
     val isClearing by viewModel.isClearing.collectAsStateWithLifecycle()
     val sisFeaturesUnlocked by viewModel.sisFeaturesUnlocked.collectAsStateWithLifecycle()
+    val sisRestoredFromBackup by viewModel.sisRestoredFromBackup.collectAsStateWithLifecycle()
     val unlockMessage by viewModel.unlockMessage.collectAsStateWithLifecycle()
     val showSpecialModePopup by viewModel.showSpecialModePopup.collectAsStateWithLifecycle()
     val selectedCalendarName by viewModel.selectedCalendarName.collectAsStateWithLifecycle()
@@ -55,6 +56,8 @@ fun SettingsScreen(
     val isSyncingFromCalendar by viewModel.isSyncingFromCalendar.collectAsStateWithLifecycle()
     val isClearingCalendar by viewModel.isClearingCalendar.collectAsStateWithLifecycle()
     val calendarSyncMessage by viewModel.calendarSyncMessage.collectAsStateWithLifecycle()
+    val showHomeSemesterProgress by viewModel.showHomeSemesterProgress.collectAsStateWithLifecycle()
+    val showHomeWeeklyGoalProgress by viewModel.showHomeWeeklyGoalProgress.collectAsStateWithLifecycle()
 
     LaunchedEffect(unlockMessage) {
         val message = unlockMessage ?: return@LaunchedEffect
@@ -163,6 +166,7 @@ fun SettingsScreen(
             com.sirius.proxima.notification.NotificationHelper.sendDemoNotification(context)
         },
         sisFeaturesUnlocked = sisFeaturesUnlocked,
+        sisRestoredFromBackup = sisRestoredFromBackup,
         onVersionTapped = { viewModel.onVersionTapped() },
         selectedCalendarName = selectedCalendarName,
         isSyncingToCalendar = isSyncingToCalendar,
@@ -180,7 +184,11 @@ fun SettingsScreen(
                 arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
             )
         },
-        onClearCalendarData = { showClearCalendarDialog = true }
+        onClearCalendarData = { showClearCalendarDialog = true },
+        showHomeSemesterProgress = showHomeSemesterProgress,
+        showHomeWeeklyGoalProgress = showHomeWeeklyGoalProgress,
+        onSetShowHomeSemesterProgress = viewModel::setShowHomeSemesterProgress,
+        onSetShowHomeWeeklyGoalProgress = viewModel::setShowHomeWeeklyGoalProgress
     )
 
     if (showClearDialog) {
@@ -243,6 +251,7 @@ fun SettingsScreenContent(
     onClearData: () -> Unit = {},
     onTestNotification: () -> Unit = {},
     sisFeaturesUnlocked: Boolean = false,
+    sisRestoredFromBackup: Boolean = false,
     onVersionTapped: () -> Unit = {},
     selectedCalendarName: String? = null,
     isSyncingToCalendar: Boolean = false,
@@ -250,7 +259,11 @@ fun SettingsScreenContent(
     isClearingCalendar: Boolean = false,
     onSyncToCalendar: () -> Unit = {},
     onSyncFromCalendar: () -> Unit = {},
-    onClearCalendarData: () -> Unit = {}
+    onClearCalendarData: () -> Unit = {},
+    showHomeSemesterProgress: Boolean = true,
+    showHomeWeeklyGoalProgress: Boolean = true,
+    onSetShowHomeSemesterProgress: (Boolean) -> Unit = {},
+    onSetShowHomeWeeklyGoalProgress: (Boolean) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -435,6 +448,23 @@ fun SettingsScreenContent(
                         )
                     }
 
+                    if (sisFeaturesUnlocked && sisRestoredFromBackup) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = AttendanceGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "SIS credentials restored from backup",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AttendanceGreen
+                            )
+                        }
+                    }
+
                     OutlinedButton(
                         onClick = onBackupNow,
                         enabled = isSignedIn && !isBackingUp,
@@ -502,6 +532,53 @@ fun SettingsScreenContent(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Send Test Notification", color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
+        }
+
+        // Home Section
+        item {
+            Text(
+                text = "Home",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Border),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Show Semester Progress")
+                        Switch(
+                            checked = showHomeSemesterProgress,
+                            onCheckedChange = onSetShowHomeSemesterProgress
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Show Weekly Goal")
+                        Switch(
+                            checked = showHomeWeeklyGoalProgress,
+                            onCheckedChange = onSetShowHomeWeeklyGoalProgress
+                        )
                     }
                 }
             }

@@ -1,5 +1,7 @@
 package com.sirius.proxima.data.sis
 
+import android.content.Context
+import android.net.ConnectivityManager
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonArray
@@ -40,7 +42,9 @@ sealed class SisResult<out T> {
     data class Error(val message: String) : SisResult<Nothing>()
 }
 
-class SISScraper {
+const val SIS_NETWORK_UNAVAILABLE = "SIS_NETWORK_UNAVAILABLE"
+
+class SISScraper(private val context: Context) {
 
     private val TAG = "SISScraper"
 
@@ -48,28 +52,51 @@ class SISScraper {
         setCookiePolicy(CookiePolicy.ACCEPT_ALL)
     }
 
-    private val client = OkHttpClient.Builder()
-        .cookieJar(okhttp3.JavaNetCookieJar(cookieManager))
-        .followRedirects(true)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val client: OkHttpClient
+        get() = buildClient()
+
+    private fun buildClient(): OkHttpClient {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+
+        return OkHttpClient.Builder()
+            .cookieJar(okhttp3.JavaNetCookieJar(cookieManager))
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
+            .apply {
+                network?.let { socketFactory(it.socketFactory) }
+            }
+            .build()
+    }
 
     private val gson = Gson()
 
     private fun getCsrfToken(): String {
-        val request = Request.Builder()
-            .url("https://student.kalasalingam.ac.in/login")
-            .get()
-            .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-            .build()
-        val response = client.newCall(request).execute()
-        val html = response.body?.string() ?: ""
-        val match = Regex("""name="csrf-token"\s+content="(.+?)"""").find(html)
-            ?: Regex("""name="_token".*?value="(.+?)"""").find(html)
-        val token = match?.groupValues?.get(1) ?: ""
-        Log.d(TAG, "CSRF token: ${token.take(10)}...")
-        return token
+        var lastError: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                val request = Request.Builder()
+                    .url("https://student.kalasalingam.ac.in/login")
+                    .get()
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+                    .build()
+                val response = client.newCall(request).execute()
+                val html = response.body?.string() ?: ""
+                val match = Regex("""name="csrf-token"\s+content="(.+?)"""").find(html)
+                    ?: Regex("""name="_token".*?value="(.+?)"""").find(html)
+                val token = match?.groupValues?.get(1) ?: ""
+                Log.d(TAG, "CSRF token attempt ${attempt + 1}: ${token.take(10)}...")
+                if (token.isNotEmpty()) return token
+            } catch (e: Exception) {
+                lastError = e
+                Thread.sleep(500L * (attempt + 1))
+            }
+        }
+        throw lastError ?: Exception("Failed to get CSRF token")
     }
 
     private fun resolveSisUrl(url: String): String {
@@ -339,4 +366,3 @@ class SISScraper {
         }
     }
 }
-

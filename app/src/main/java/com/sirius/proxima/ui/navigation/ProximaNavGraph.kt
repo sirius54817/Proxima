@@ -19,9 +19,21 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.sirius.proxima.di.ServiceLocator
+import com.sirius.proxima.ui.screen.AcademicToolsScreen
+import com.sirius.proxima.ui.screen.AssignmentTrackerScreen
+import com.sirius.proxima.ui.screen.CreditTrackerScreen
+import com.sirius.proxima.ui.screen.ExamTimetableScreen
+import com.sirius.proxima.ui.screen.FocusModeScreen
+import com.sirius.proxima.ui.screen.GpaToolScreen
+import com.sirius.proxima.ui.screen.HolidayCalendarScreen
 import com.sirius.proxima.ui.screen.HomeScreen
+import com.sirius.proxima.ui.screen.NoteDetailScreen
+import com.sirius.proxima.ui.screen.NotesListScreen
 import com.sirius.proxima.ui.screen.SettingsScreen
 import com.sirius.proxima.ui.screen.SisScreen
+import com.sirius.proxima.ui.screen.StudyScreen
+import com.sirius.proxima.ui.screen.StudyPdfScreen
+import com.sirius.proxima.ui.screen.StudyPdfViewerScreen
 import com.sirius.proxima.ui.screen.SubjectHistoryScreen
 import com.sirius.proxima.ui.screen.TimetableScreen
 import com.sirius.proxima.ui.theme.Border
@@ -100,6 +112,54 @@ fun ProximaNavGraph() {
             composable(Screen.Timetable.route) {
                 TimetableScreen()
             }
+            composable(Screen.Study.route) {
+                StudyScreen(
+                    onOpenNotes = { navController.navigate(Screen.NotesList.route) },
+                    onOpenStudyPdfs = { navController.navigate(Screen.StudyPdf.route) },
+                    onOpenFocusMode = { navController.navigate(Screen.FocusMode.route) }
+                )
+            }
+            composable(Screen.FocusMode.route) {
+                FocusModeScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.StudyPdf.route) {
+                StudyPdfScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Screen.StudyPdfViewer.route,
+                arguments = listOf(navArgument("pdfId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val pdfId = backStackEntry.arguments?.getInt("pdfId") ?: 0
+                StudyPdfViewerScreen(pdfId = pdfId, onBack = { navController.popBackStack() })
+            }
+            composable(Screen.NotesList.route) {
+                NotesListScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenNote = { noteId -> navController.navigate(Screen.NoteDetail.createRoute(noteId)) },
+                    onCreateNote = { navController.navigate(Screen.NoteDetail.createRoute(0)) }
+                )
+            }
+            composable(
+                route = Screen.NoteDetail.route,
+                arguments = listOf(navArgument("noteId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val noteId = backStackEntry.arguments?.getInt("noteId") ?: 0
+                NoteDetailScreen(
+                    noteId = noteId,
+                    onBack = { navController.popBackStack() }
+                )
+            }
+            composable(Screen.AcademicTools.route) {
+                AcademicToolsScreen(
+                    onOpenGpa = { navController.navigate(Screen.GpaTool.route) },
+                    onOpenAssignments = { navController.navigate(Screen.AssignmentTool.route) },
+                    onOpenExams = { navController.navigate(Screen.ExamTool.route) },
+                    onOpenCredits = { navController.navigate(Screen.CreditTool.route) },
+                    onOpenHolidayCalendar = {
+                        navController.navigate(Screen.HolidayCalendar.route)
+                    }
+                )
+            }
             composable(Screen.Sis.route) {
                 if (sisUnlocked) {
                     SisScreen()
@@ -117,6 +177,21 @@ fun ProximaNavGraph() {
             }
             composable(Screen.Settings.route) {
                 SettingsScreen()
+            }
+            composable(Screen.HolidayCalendar.route) {
+                HolidayCalendarScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.GpaTool.route) {
+                GpaToolScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.AssignmentTool.route) {
+                AssignmentTrackerScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.ExamTool.route) {
+                ExamTimetableScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.CreditTool.route) {
+                CreditTrackerScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Screen.SubjectHistory.route,

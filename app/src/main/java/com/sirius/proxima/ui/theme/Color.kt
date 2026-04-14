@@ -19,6 +19,7 @@ val Outline = Color(0xFF27272A)
 
 // Semantic colors
 val AttendanceGreen = Color(0xFF22C55E)
+val AttendanceBlue = Color(0xFF3B82F6)
 val AttendanceRed = Color(0xFFEF4444)
 val DangerRed = Color(0xFFEF4444)
 

@@ -1,6 +1,7 @@
 package com.sirius.proxima.backup
 
 import android.content.Context
+import android.util.Base64
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.http.ByteArrayContent
@@ -12,14 +13,30 @@ import com.google.gson.Gson
 import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.data.model.SubjectAttendanceRecord
 import com.sirius.proxima.data.model.TimetableEntry
+import com.sirius.proxima.data.model.SubjectNote
+import com.sirius.proxima.data.model.NoteChecklistItem
+import com.sirius.proxima.data.model.StudyPdf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.File
+
+data class BackupPdfBlob(
+    val item: StudyPdf,
+    val fileName: String,
+    val base64Content: String
+)
 
 data class BackupData(
     val subjects: List<Subject>,
     val timetableEntries: List<TimetableEntry>,
-    val attendanceHistory: List<SubjectAttendanceRecord>? = null
+    val attendanceHistory: List<SubjectAttendanceRecord>? = null,
+    val notes: List<SubjectNote>? = null,
+    val noteChecklistItems: List<NoteChecklistItem>? = null,
+    val studyPdfs: List<BackupPdfBlob>? = null,
+    val sisRegisterNo: String? = null,
+    val sisPassword: String? = null,
+    val sisLoggedIn: Boolean? = null
 )
 
 object DriveBackupHelper {
@@ -45,12 +62,39 @@ object DriveBackupHelper {
         context: Context,
         subjects: List<Subject>,
         entries: List<TimetableEntry>,
-        attendanceHistory: List<SubjectAttendanceRecord>
+        attendanceHistory: List<SubjectAttendanceRecord>,
+        notes: List<SubjectNote>,
+        noteChecklistItems: List<NoteChecklistItem>,
+        studyPdfs: List<StudyPdf>,
+        sisRegisterNo: String?,
+        sisPassword: String?,
+        sisLoggedIn: Boolean
     ): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 val driveService = getDriveService(context) ?: return@withContext false
-                val backupData = BackupData(subjects, entries, attendanceHistory)
+                val pdfBlobs = studyPdfs.mapNotNull { pdf ->
+                    val file = File(pdf.filePath)
+                    if (!file.exists()) return@mapNotNull null
+                    val bytes = runCatching { file.readBytes() }.getOrNull() ?: return@mapNotNull null
+                    BackupPdfBlob(
+                        item = pdf,
+                        fileName = file.name,
+                        base64Content = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                    )
+                }
+
+                val backupData = BackupData(
+                    subjects = subjects,
+                    timetableEntries = entries,
+                    attendanceHistory = attendanceHistory,
+                    notes = notes,
+                    noteChecklistItems = noteChecklistItems,
+                    studyPdfs = pdfBlobs,
+                    sisRegisterNo = sisRegisterNo,
+                    sisPassword = sisPassword,
+                    sisLoggedIn = sisLoggedIn
+                )
                 val json = Gson().toJson(backupData)
 
                 // Check if backup file already exists
@@ -90,7 +134,12 @@ object DriveBackupHelper {
                 val json = outputStream.toString("UTF-8")
 
                 val raw = Gson().fromJson(json, BackupData::class.java)
-                raw.copy(attendanceHistory = raw.attendanceHistory ?: emptyList())
+                raw.copy(
+                    attendanceHistory = raw.attendanceHistory ?: emptyList(),
+                    notes = raw.notes ?: emptyList(),
+                    noteChecklistItems = raw.noteChecklistItems ?: emptyList(),
+                    studyPdfs = raw.studyPdfs ?: emptyList()
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
                 null

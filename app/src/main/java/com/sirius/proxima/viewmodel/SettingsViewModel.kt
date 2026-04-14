@@ -9,6 +9,8 @@ import com.sirius.proxima.backup.DriveBackupHelper
 import com.sirius.proxima.data.calendar.CalendarSyncHelper
 import com.sirius.proxima.data.datastore.SettingsDataStore
 import com.sirius.proxima.data.model.TimetableEntry
+import com.sirius.proxima.data.repository.AcademicToolsRepository
+import com.sirius.proxima.data.repository.StudyRepository
 import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 import com.sirius.proxima.di.ServiceLocator
@@ -21,7 +23,9 @@ class SettingsViewModel(
     application: Application,
     private val settingsDataStore: SettingsDataStore,
     private val subjectRepository: SubjectRepository,
-    private val timetableRepository: TimetableRepository
+    private val timetableRepository: TimetableRepository,
+    private val academicToolsRepository: AcademicToolsRepository,
+    private val studyRepository: StudyRepository
 ) : AndroidViewModel(application) {
 
     private var versionTapCount = 0
@@ -46,6 +50,15 @@ class SettingsViewModel(
 
     val sisFeaturesUnlocked: StateFlow<Boolean> = settingsDataStore.sisFeaturesUnlocked
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val sisRestoredFromBackup: StateFlow<Boolean> = settingsDataStore.sisRestoredFromBackup
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val showHomeSemesterProgress: StateFlow<Boolean> = settingsDataStore.showHomeSemesterProgress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val showHomeWeeklyGoalProgress: StateFlow<Boolean> = settingsDataStore.showHomeWeeklyGoalProgress
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     private val _isBackingUp = MutableStateFlow(false)
     val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
@@ -120,6 +133,14 @@ class SettingsViewModel(
 
     fun clearCalendarSyncMessage() {
         _calendarSyncMessage.value = null
+    }
+
+    fun setShowHomeSemesterProgress(show: Boolean) {
+        viewModelScope.launch { settingsDataStore.setShowHomeSemesterProgress(show) }
+    }
+
+    fun setShowHomeWeeklyGoalProgress(show: Boolean) {
+        viewModelScope.launch { settingsDataStore.setShowHomeWeeklyGoalProgress(show) }
     }
 
     fun syncTimetableToGoogleCalendar() {
@@ -240,6 +261,7 @@ class SettingsViewModel(
     fun onSignOut() {
         viewModelScope.launch {
             settingsDataStore.clearGoogleAccount()
+            settingsDataStore.setSisRestoredFromBackup(false)
             BackupScheduler.cancelBackup(getApplication())
         }
     }
@@ -251,7 +273,24 @@ class SettingsViewModel(
                 val subjects = subjectRepository.getAllSubjectsList()
                 val entries = timetableRepository.getAllEntriesList()
                 val attendanceHistory = subjectRepository.getAllAttendanceRecordsList()
-                val success = DriveBackupHelper.backup(getApplication(), subjects, entries, attendanceHistory)
+                val notes = studyRepository.getSubjectNotesList()
+                val checklist = studyRepository.getChecklistItemsList()
+                val pdfs = studyRepository.getStudyPdfsList()
+                val sisRegisterNo = settingsDataStore.sisRegisterNo.first()
+                val sisPassword = settingsDataStore.sisPassword.first()
+                val sisLoggedIn = settingsDataStore.sisLoggedIn.first()
+                val success = DriveBackupHelper.backup(
+                    getApplication(),
+                    subjects,
+                    entries,
+                    attendanceHistory,
+                    notes,
+                    checklist,
+                    pdfs,
+                    sisRegisterNo,
+                    sisPassword,
+                    sisLoggedIn
+                )
                 if (success) {
                     settingsDataStore.setLastBackupTime(System.currentTimeMillis())
                 }
@@ -284,6 +323,40 @@ class SettingsViewModel(
                     record.copy(id = 0, subjectId = mappedSubjectId)
                 }
                 subjectRepository.insertAttendanceRecords(mappedHistory)
+
+                val oldToNewNoteIds = mutableMapOf<Int, Int>()
+                (backupData.notes ?: emptyList()).forEach { note ->
+                    val mappedSubjectId = oldToNewSubjectIds[note.subjectId] ?: return@forEach
+                    val newNoteId = studyRepository.insertRawNote(note.copy(id = 0, subjectId = mappedSubjectId))
+                    oldToNewNoteIds[note.id] = newNoteId
+                }
+
+                val mappedChecklist = (backupData.noteChecklistItems ?: emptyList()).mapNotNull { item ->
+                    val mappedNoteId = oldToNewNoteIds[item.noteId] ?: return@mapNotNull null
+                    item.copy(id = 0, noteId = mappedNoteId)
+                }
+                studyRepository.insertRawChecklistItems(mappedChecklist)
+
+                (backupData.studyPdfs ?: emptyList()).forEach { blob ->
+                    val mappedSubjectId = oldToNewSubjectIds[blob.item.subjectId] ?: return@forEach
+                    val bytes = runCatching {
+                        android.util.Base64.decode(blob.base64Content, android.util.Base64.DEFAULT)
+                    }.getOrNull() ?: return@forEach
+
+                    val app = getApplication<Application>()
+                    val dir = java.io.File(app.filesDir, "study_pdfs").apply { mkdirs() }
+                    val safeName = blob.fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    val outFile = java.io.File(dir, "restore_${System.currentTimeMillis()}_$safeName")
+                    runCatching { outFile.writeBytes(bytes) }.getOrNull() ?: return@forEach
+                    studyRepository.addStudyPdf(mappedSubjectId, blob.item.title, outFile.absolutePath)
+                }
+
+                val backupRegNo = backupData.sisRegisterNo
+                val backupPassword = backupData.sisPassword
+                if (!backupRegNo.isNullOrBlank() && !backupPassword.isNullOrBlank() && (backupData.sisLoggedIn == true)) {
+                    settingsDataStore.setSisCredentials(backupRegNo, backupPassword)
+                    settingsDataStore.setSisRestoredFromBackup(true)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -302,10 +375,18 @@ class SettingsViewModel(
                 subjectRepository.deleteAll()
                 timetableRepository.deleteAll()
 
+                // Clear academic tools data and alarms
+                val assignments = academicToolsRepository.getAllAssignmentsList()
+                assignments.forEach { com.sirius.proxima.notification.AlarmScheduler.cancelAssignmentReminder(getApplication(), it.id) }
+                val exams = academicToolsRepository.getAllExamsList()
+                exams.forEach { com.sirius.proxima.notification.AlarmScheduler.cancelExamReminder(getApplication(), it.id) }
+                academicToolsRepository.clearAll()
+
                 // Delete Drive backup
                 DriveBackupHelper.deleteBackup(getApplication())
 
                 settingsDataStore.setLastBackupTime(0L)
+                settingsDataStore.setSisRestoredFromBackup(false)
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
@@ -323,7 +404,9 @@ class SettingsViewModel(
                         application,
                         ServiceLocator.getSettingsDataStore(application),
                         ServiceLocator.getSubjectRepository(application),
-                        ServiceLocator.getTimetableRepository(application)
+                        ServiceLocator.getTimetableRepository(application),
+                        ServiceLocator.getAcademicToolsRepository(application),
+                        ServiceLocator.getStudyRepository(application)
                     ) as T
                 }
             }

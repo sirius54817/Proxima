@@ -39,6 +39,42 @@ object NotificationHelper {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(99999, notification)
     }
+
+    fun showAssignmentNotification(
+        context: Context,
+        title: String,
+        dueDateText: String,
+        notificationId: Int
+    ) {
+        val notification = NotificationCompat.Builder(context, ProximaApplication.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Assignment Reminder")
+            .setContentText("$title is due on $dueDateText")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notificationId, notification)
+    }
+
+    fun showExamNotification(
+        context: Context,
+        subject: String,
+        examTimeText: String,
+        notificationId: Int
+    ) {
+        val notification = NotificationCompat.Builder(context, ProximaApplication.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Exam Reminder")
+            .setContentText("$subject exam at $examTimeText")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notificationId, notification)
+    }
 }
 
 

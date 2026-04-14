@@ -14,7 +14,8 @@ data class SubjectAttendanceRecord(
     val subjectId: Int,
     val status: String,
     val date: String,
-    val slotName: String? = null
+    val slotName: String? = null,
+    val recordedAtMillis: Long = System.currentTimeMillis()
 )
 
 object AttendanceStatus {

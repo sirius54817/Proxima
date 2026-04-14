@@ -10,6 +10,13 @@ import java.util.Calendar
 
 object AlarmScheduler {
 
+    const val TYPE_CLASS = "class"
+    const val TYPE_ASSIGNMENT = "assignment"
+    const val TYPE_EXAM = "exam"
+
+    private const val ASSIGNMENT_REQUEST_OFFSET = 100000
+    private const val EXAM_REQUEST_OFFSET = 200000
+
     private fun getRequestCode(dayOfWeek: Int, hourSlot: Int): Int {
         return dayOfWeek * 100 + hourSlot
     }
@@ -18,6 +25,7 @@ object AlarmScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
         val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("alarm_type", TYPE_CLASS)
             putExtra("subject_name", entry.subjectName)
             putExtra("class_number", entry.classNumber)
             putExtra("percentage", subjectPercentage)
@@ -58,6 +66,87 @@ object AlarmScheduler {
         val pendingIntent = PendingIntent.getBroadcast(
             context,
             requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pendingIntent)
+    }
+
+    private fun reminderRequestCode(type: String, id: Int): Int {
+        return when (type) {
+            TYPE_ASSIGNMENT -> ASSIGNMENT_REQUEST_OFFSET + id
+            TYPE_EXAM -> EXAM_REQUEST_OFFSET + id
+            else -> id
+        }
+    }
+
+    fun scheduleAssignmentReminder(context: Context, reminderId: Int, title: String, dueDateText: String, triggerAtMillis: Long) {
+        scheduleOneTimeReminder(
+            context = context,
+            type = TYPE_ASSIGNMENT,
+            reminderId = reminderId,
+            title = title,
+            timeText = dueDateText,
+            triggerAtMillis = triggerAtMillis
+        )
+    }
+
+    fun scheduleExamReminder(context: Context, reminderId: Int, subject: String, examTimeText: String, triggerAtMillis: Long) {
+        scheduleOneTimeReminder(
+            context = context,
+            type = TYPE_EXAM,
+            reminderId = reminderId,
+            title = subject,
+            timeText = examTimeText,
+            triggerAtMillis = triggerAtMillis
+        )
+    }
+
+    fun cancelAssignmentReminder(context: Context, reminderId: Int) {
+        cancelOneTimeReminder(context, TYPE_ASSIGNMENT, reminderId)
+    }
+
+    fun cancelExamReminder(context: Context, reminderId: Int) {
+        cancelOneTimeReminder(context, TYPE_EXAM, reminderId)
+    }
+
+    private fun scheduleOneTimeReminder(
+        context: Context,
+        type: String,
+        reminderId: Int,
+        title: String,
+        timeText: String,
+        triggerAtMillis: Long
+    ) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("alarm_type", type)
+            putExtra("item_id", reminderId)
+            putExtra("title", title)
+            putExtra("time_text", timeText)
+        }
+
+        val requestCode = reminderRequestCode(type, reminderId)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        } catch (e: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+        }
+    }
+
+    private fun cancelOneTimeReminder(context: Context, type: String, reminderId: Int) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            reminderRequestCode(type, reminderId),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

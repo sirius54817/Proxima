@@ -15,13 +15,13 @@ interface SubjectAttendanceRecordDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRecords(records: List<SubjectAttendanceRecord>)
 
-    @Query("SELECT * FROM subject_attendance_records ORDER BY date DESC, id DESC")
+    @Query("SELECT * FROM subject_attendance_records ORDER BY recordedAtMillis DESC, date DESC, id DESC")
     suspend fun getAllRecordsList(): List<SubjectAttendanceRecord>
 
     @Query("DELETE FROM subject_attendance_records")
     suspend fun deleteAllRecords()
 
-    @Query("SELECT * FROM subject_attendance_records WHERE subjectId = :subjectId ORDER BY date DESC, id DESC")
+    @Query("SELECT * FROM subject_attendance_records WHERE subjectId = :subjectId ORDER BY recordedAtMillis DESC, date DESC, id DESC")
     fun getRecordsBySubjectId(subjectId: Int): Flow<List<SubjectAttendanceRecord>>
 }
 

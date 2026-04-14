@@ -1,19 +1,26 @@
 package com.sirius.proxima.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,14 +45,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.SubjectAttendanceRecord
+import com.sirius.proxima.ui.theme.AttendanceBlue
+import com.sirius.proxima.ui.theme.AttendanceGreen
 import com.sirius.proxima.ui.theme.AttendanceRed
+import com.sirius.proxima.ui.theme.Border
+import com.sirius.proxima.ui.theme.Muted
 import com.sirius.proxima.ui.theme.MutedForeground
+import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.data.model.AttendanceStatus
 import com.sirius.proxima.viewmodel.HomeViewModel
 import java.time.LocalDate
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
+
+private enum class HistoryViewMode { CALENDAR, LIST }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +87,8 @@ fun SubjectHistoryScreen(
     val subject = subjects.find { it.id == subjectId }
     var visibleCount by remember(subjectId) { mutableStateOf(15) }
     var showManualAddDialog by remember { mutableStateOf(false) }
+    var viewMode by remember { mutableStateOf(HistoryViewMode.CALENDAR) }
+    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
 
     LaunchedEffect(history.size) {
         if (history.size < visibleCount) {
@@ -84,6 +108,16 @@ fun SubjectHistoryScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = {
+                        viewMode = if (viewMode == HistoryViewMode.CALENDAR) HistoryViewMode.LIST else HistoryViewMode.CALENDAR
+                    }) {
+                        Icon(
+                            imageVector = if (viewMode == HistoryViewMode.CALENDAR) Icons.AutoMirrored.Filled.ViewList else Icons.Default.CalendarMonth,
+                            contentDescription = if (viewMode == HistoryViewMode.CALENDAR) "Show list" else "Show calendar"
+                        )
                     }
                 }
             )
@@ -123,12 +157,14 @@ fun SubjectHistoryScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = { visibleCount += 15 },
-                    enabled = visibleCount < history.size,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Load Next 15")
+                if (viewMode == HistoryViewMode.LIST) {
+                    OutlinedButton(
+                        onClick = { visibleCount += 15 },
+                        enabled = visibleCount < history.size,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Load Next 15")
+                    }
                 }
 
                 if (sisUnlocked) {
@@ -173,6 +209,13 @@ fun SubjectHistoryScreen(
                 ) {
                     Text("Add your own entry")
                 }
+            } else if (viewMode == HistoryViewMode.CALENDAR) {
+                AttendanceHistoryCalendar(
+                    history = history,
+                    month = currentMonth,
+                    onPrevMonth = { currentMonth = currentMonth.minusMonths(1) },
+                    onNextMonth = { currentMonth = currentMonth.plusMonths(1) }
+                )
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -181,16 +224,26 @@ fun SubjectHistoryScreen(
                 ) {
                     items(history.take(visibleCount), key = { it.id }) { record ->
                         val slotText = record.slotName?.takeIf { it.isNotBlank() }?.let { " - $it" } ?: ""
+                        val timestampText = Instant.ofEpochMilli(record.recordedAtMillis)
+                            .atZone(ZoneId.systemDefault())
+                            .toLocalDateTime()
+                            .format(DateTimeFormatter.ofPattern("MMM d, yyyy hh:mm a"))
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
                         ) {
-                            Text(
-                                text = "${record.date} - ${record.status}$slotText",
-                                modifier = Modifier.padding(12.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
-                            )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = "${record.date} - ${record.status}$slotText",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "Recorded: $timestampText",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MutedForeground
+                                )
+                            }
                         }
                     }
                 }
@@ -254,6 +307,132 @@ fun SubjectHistoryScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun AttendanceHistoryCalendar(
+    history: List<SubjectAttendanceRecord>,
+    month: YearMonth,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit
+) {
+    val statusByDate = history
+        .mapNotNull { record ->
+            val date = runCatching { LocalDate.parse(record.date) }.getOrNull() ?: return@mapNotNull null
+            date to record.status
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, statuses) ->
+            when {
+                statuses.contains(AttendanceStatus.ABSENT) -> AttendanceStatus.ABSENT
+                statuses.contains(AttendanceStatus.ON_DUTY) -> AttendanceStatus.ON_DUTY
+                else -> AttendanceStatus.PRESENT
+            }
+        }
+
+    val first = month.atDay(1)
+    val offset = first.dayOfWeek.value - 1
+    val total = month.lengthOfMonth()
+    val cells = mutableListOf<Int?>()
+    repeat(offset) { cells.add(null) }
+    for (d in 1..total) cells.add(d)
+    while (cells.size % 7 != 0) cells.add(null)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                IconButton(onClick = onPrevMonth) {
+                    Icon(Icons.Default.ChevronLeft, contentDescription = "Previous")
+                }
+                Text(
+                    text = "${month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${month.year}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                IconButton(onClick = onNextMonth) {
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Next")
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                listOf("M", "T", "W", "T", "F", "S", "S").forEach { label ->
+                    Text(label, modifier = Modifier.weight(1f), color = MutedForeground)
+                }
+            }
+
+            cells.chunked(7).forEach { week ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    week.forEach { dayNumber ->
+                        val date = dayNumber?.let { month.atDay(it) }
+                        val isToday = date == LocalDate.now()
+                        val status = date?.let { statusByDate[it] }
+                        val dotColor = when (status) {
+                            AttendanceStatus.PRESENT -> AttendanceGreen
+                            AttendanceStatus.ON_DUTY -> AttendanceBlue
+                            AttendanceStatus.ABSENT -> AttendanceRed
+                            else -> null
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .size(36.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                .let {
+                                    if (isToday) it.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                    else it
+                                },
+                            contentAlignment = androidx.compose.ui.Alignment.Center
+                        ) {
+                            Text(
+                                text = dayNumber?.toString() ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (status == null) Muted else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (dotColor != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .align(androidx.compose.ui.Alignment.BottomCenter)
+                                        .padding(bottom = 3.dp)
+                                        .background(dotColor, androidx.compose.foundation.shape.CircleShape)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LegendDot("Present", AttendanceGreen)
+                LegendDot("On Duty", AttendanceBlue)
+                LegendDot("Absent", AttendanceRed)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LegendDot(label: String, color: androidx.compose.ui.graphics.Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(color, androidx.compose.foundation.shape.CircleShape)
+        )
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
+@Composable
+private fun SubjectHistoryScreenPreview() {
+    ProximaTheme {
+        SubjectHistoryScreen(subjectId = 1, onBack = {})
     }
 }
 

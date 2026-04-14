@@ -5,6 +5,8 @@ import androidx.room.Room
 import com.sirius.proxima.data.database.ProximaDatabase
 import com.sirius.proxima.data.datastore.SettingsDataStore
 import com.sirius.proxima.data.datastore.dataStore
+import com.sirius.proxima.data.repository.AcademicToolsRepository
+import com.sirius.proxima.data.repository.StudyRepository
 import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 
@@ -27,6 +29,12 @@ object ServiceLocator {
 
     @Volatile
     private var sisRepository: SisRepository? = null
+
+    @Volatile
+    private var academicToolsRepository: AcademicToolsRepository? = null
+
+    @Volatile
+    private var studyRepository: StudyRepository? = null
 
     private fun getDatabase(context: Context): ProximaDatabase {
         return database ?: synchronized(this) {
@@ -69,9 +77,32 @@ object ServiceLocator {
     fun getSisRepository(context: Context): SisRepository {
         return sisRepository ?: synchronized(this) {
             sisRepository ?: SisRepository(
-                SISScraper(),
+                SISScraper(context.applicationContext),
                 getSettingsDataStore(context)
             ).also { sisRepository = it }
+        }
+    }
+
+    fun getAcademicToolsRepository(context: Context): AcademicToolsRepository {
+        return academicToolsRepository ?: synchronized(this) {
+            val db = getDatabase(context)
+            academicToolsRepository ?: AcademicToolsRepository(
+                db.assignmentReminderDao(),
+                db.examReminderDao()
+            ).also { academicToolsRepository = it }
+        }
+    }
+
+    fun getStudyRepository(context: Context): StudyRepository {
+        return studyRepository ?: synchronized(this) {
+            val db = getDatabase(context)
+            studyRepository ?: StudyRepository(
+                db.studySessionDao(),
+                db.studyPdfDao(),
+                db.subjectNoteDao(),
+                db.noteChecklistItemDao(),
+                db.plannerEventDao()
+            ).also { studyRepository = it }
         }
     }
 }

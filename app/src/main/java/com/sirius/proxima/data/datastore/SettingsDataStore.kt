@@ -21,8 +21,20 @@ class SettingsDataStore(
         val SIS_PASSWORD = stringPreferencesKey("sis_password")
         val SIS_LOGGED_IN = booleanPreferencesKey("sis_logged_in")
         val SIS_FEATURES_UNLOCKED = booleanPreferencesKey("sis_features_unlocked")
+        val SIS_RESTORED_FROM_BACKUP = booleanPreferencesKey("sis_restored_from_backup")
         val GOOGLE_CALENDAR_ID = longPreferencesKey("google_calendar_id")
         val GOOGLE_CALENDAR_NAME = stringPreferencesKey("google_calendar_name")
+        val ACADEMIC_PREVIOUS_CGPA = stringPreferencesKey("academic_previous_cgpa")
+        val ACADEMIC_PREVIOUS_CREDITS = stringPreferencesKey("academic_previous_credits")
+        val ACADEMIC_COMPLETED_CREDITS = stringPreferencesKey("academic_completed_credits")
+        val ACADEMIC_REQUIRED_CREDITS = stringPreferencesKey("academic_required_credits")
+        val WEEKLY_STUDY_GOAL_MINUTES = intPreferencesKey("weekly_study_goal_minutes")
+        val SEMESTER_START_DATE = stringPreferencesKey("semester_start_date")
+        val SEMESTER_END_DATE = stringPreferencesKey("semester_end_date")
+        val SHOW_HOME_SEMESTER_PROGRESS = booleanPreferencesKey("show_home_semester_progress")
+        val SHOW_HOME_EXAM_COUNTDOWN = booleanPreferencesKey("show_home_exam_countdown")
+        val SHOW_HOME_WEEK_OVERVIEW = booleanPreferencesKey("show_home_week_overview")
+        val SHOW_HOME_WEEKLY_GOAL_PROGRESS = booleanPreferencesKey("show_home_weekly_goal_progress")
     }
 
     val googleAccountName: Flow<String?> = dataStore.data.map { it[GOOGLE_ACCOUNT_NAME] }
@@ -33,8 +45,20 @@ class SettingsDataStore(
     val sisPassword: Flow<String?> = dataStore.data.map { it[SIS_PASSWORD] }
     val sisLoggedIn: Flow<Boolean> = dataStore.data.map { it[SIS_LOGGED_IN] ?: false }
     val sisFeaturesUnlocked: Flow<Boolean> = dataStore.data.map { it[SIS_FEATURES_UNLOCKED] ?: false }
+    val sisRestoredFromBackup: Flow<Boolean> = dataStore.data.map { it[SIS_RESTORED_FROM_BACKUP] ?: false }
     val googleCalendarId: Flow<Long?> = dataStore.data.map { it[GOOGLE_CALENDAR_ID] }
     val googleCalendarName: Flow<String?> = dataStore.data.map { it[GOOGLE_CALENDAR_NAME] }
+    val academicPreviousCgpa: Flow<String> = dataStore.data.map { it[ACADEMIC_PREVIOUS_CGPA] ?: "" }
+    val academicPreviousCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_PREVIOUS_CREDITS] ?: "" }
+    val academicCompletedCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_COMPLETED_CREDITS] ?: "" }
+    val academicRequiredCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_REQUIRED_CREDITS] ?: "" }
+    val weeklyStudyGoalMinutes: Flow<Int> = dataStore.data.map { it[WEEKLY_STUDY_GOAL_MINUTES] ?: 600 }
+    val semesterStartDate: Flow<String?> = dataStore.data.map { it[SEMESTER_START_DATE] }
+    val semesterEndDate: Flow<String?> = dataStore.data.map { it[SEMESTER_END_DATE] }
+    val showHomeSemesterProgress: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_SEMESTER_PROGRESS] ?: true }
+    val showHomeExamCountdown: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_EXAM_COUNTDOWN] ?: true }
+    val showHomeWeekOverview: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_WEEK_OVERVIEW] ?: true }
+    val showHomeWeeklyGoalProgress: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_WEEKLY_GOAL_PROGRESS] ?: true }
 
     suspend fun setSisCredentials(registerNo: String, password: String) {
         dataStore.edit {
@@ -58,6 +82,12 @@ class SettingsDataStore(
         }
     }
 
+    suspend fun setSisRestoredFromBackup(restored: Boolean) {
+        dataStore.edit {
+            it[SIS_RESTORED_FROM_BACKUP] = restored
+        }
+    }
+
     suspend fun setGoogleCalendar(calendarId: Long, calendarName: String) {
         dataStore.edit {
             it[GOOGLE_CALENDAR_ID] = calendarId
@@ -70,6 +100,49 @@ class SettingsDataStore(
             it.remove(GOOGLE_CALENDAR_ID)
             it.remove(GOOGLE_CALENDAR_NAME)
         }
+    }
+
+    suspend fun setAcademicPreviousCgpa(value: String) {
+        dataStore.edit { it[ACADEMIC_PREVIOUS_CGPA] = value }
+    }
+
+    suspend fun setAcademicPreviousCredits(value: String) {
+        dataStore.edit { it[ACADEMIC_PREVIOUS_CREDITS] = value }
+    }
+
+    suspend fun setAcademicCompletedCredits(value: String) {
+        dataStore.edit { it[ACADEMIC_COMPLETED_CREDITS] = value }
+    }
+
+    suspend fun setAcademicRequiredCredits(value: String) {
+        dataStore.edit { it[ACADEMIC_REQUIRED_CREDITS] = value }
+    }
+
+    suspend fun setWeeklyStudyGoalMinutes(value: Int) {
+        dataStore.edit { it[WEEKLY_STUDY_GOAL_MINUTES] = value.coerceAtLeast(60) }
+    }
+
+    suspend fun setSemesterDates(startDate: String, endDate: String) {
+        dataStore.edit {
+            it[SEMESTER_START_DATE] = startDate
+            it[SEMESTER_END_DATE] = endDate
+        }
+    }
+
+    suspend fun setShowHomeSemesterProgress(show: Boolean) {
+        dataStore.edit { it[SHOW_HOME_SEMESTER_PROGRESS] = show }
+    }
+
+    suspend fun setShowHomeExamCountdown(show: Boolean) {
+        dataStore.edit { it[SHOW_HOME_EXAM_COUNTDOWN] = show }
+    }
+
+    suspend fun setShowHomeWeekOverview(show: Boolean) {
+        dataStore.edit { it[SHOW_HOME_WEEK_OVERVIEW] = show }
+    }
+
+    suspend fun setShowHomeWeeklyGoalProgress(show: Boolean) {
+        dataStore.edit { it[SHOW_HOME_WEEKLY_GOAL_PROGRESS] = show }
     }
 
     suspend fun setGoogleAccount(name: String, email: String) {

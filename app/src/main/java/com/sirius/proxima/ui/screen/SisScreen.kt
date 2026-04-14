@@ -27,10 +27,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.data.sis.SisAttendance
+import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.ui.theme.*
 import com.sirius.proxima.viewmodel.SisUiState
 import com.sirius.proxima.viewmodel.SisViewModel
@@ -126,7 +128,7 @@ private fun SisLoginScreen(
                     value = registerNo,
                     onValueChange = { registerNo = it },
                     label = { Text("Register Number") },
-                    placeholder = { Text("e.g. 99220041611") },
+                    placeholder = { Text("e.g. 992x004xxxx") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
@@ -473,6 +475,21 @@ private fun AttendanceStat(label: String, value: String, color: androidx.compose
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = value, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = color)
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MutedForeground)
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
+@Composable
+private fun SisAttendanceScreenPreview() {
+    ProximaTheme {
+        SisAttendanceScreen(
+            attendance = listOf(
+                SisAttendance("CSE101", "Data Structures", "4", 40, 32, 6, 2, 0, 80.0, ""),
+                SisAttendance("MAT201", "Discrete Mathematics", "3", 30, 18, 10, 2, 0, 66.6, "")
+            ),
+            onRefresh = {},
+            onLogout = {}
+        )
     }
 }
 

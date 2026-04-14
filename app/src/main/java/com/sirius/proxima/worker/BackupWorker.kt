@@ -17,6 +17,7 @@ class BackupWorker(
             val settingsDataStore = ServiceLocator.getSettingsDataStore(applicationContext)
             val subjectRepository = ServiceLocator.getSubjectRepository(applicationContext)
             val timetableRepository = ServiceLocator.getTimetableRepository(applicationContext)
+            val studyRepository = ServiceLocator.getStudyRepository(applicationContext)
 
             val isSignedIn = settingsDataStore.isSignedIn.first()
             if (!isSignedIn) return Result.success()
@@ -24,8 +25,25 @@ class BackupWorker(
             val subjects = subjectRepository.getAllSubjectsList()
             val entries = timetableRepository.getAllEntriesList()
             val attendanceHistory = subjectRepository.getAllAttendanceRecordsList()
+            val notes = studyRepository.getSubjectNotesList()
+            val checklist = studyRepository.getChecklistItemsList()
+            val pdfs = studyRepository.getStudyPdfsList()
+            val sisRegisterNo = settingsDataStore.sisRegisterNo.first()
+            val sisPassword = settingsDataStore.sisPassword.first()
+            val sisLoggedIn = settingsDataStore.sisLoggedIn.first()
 
-            val success = DriveBackupHelper.backup(applicationContext, subjects, entries, attendanceHistory)
+            val success = DriveBackupHelper.backup(
+                applicationContext,
+                subjects,
+                entries,
+                attendanceHistory,
+                notes,
+                checklist,
+                pdfs,
+                sisRegisterNo,
+                sisPassword,
+                sisLoggedIn
+            )
             if (success) {
                 settingsDataStore.setLastBackupTime(System.currentTimeMillis())
                 Result.success()
