@@ -1,22 +1,14 @@
 package com.sirius.proxima.data.sis
 
-import android.content.Context
-import android.net.ConnectivityManager
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
 data class SisAttendance(
     val courseCode: String,
@@ -44,60 +36,13 @@ sealed class SisResult<out T> {
 
 const val SIS_NETWORK_UNAVAILABLE = "SIS_NETWORK_UNAVAILABLE"
 
-class SISScraper(private val context: Context) {
+class SISScraper(
+    private val sessionProvider: SisSessionProvider
+) {
 
     private val TAG = "SISScraper"
 
-    private val cookieManager = CookieManager().apply {
-        setCookiePolicy(CookiePolicy.ACCEPT_ALL)
-    }
-
-    private val client: OkHttpClient
-        get() = buildClient()
-
-    private fun buildClient(): OkHttpClient {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = connectivityManager.activeNetwork
-
-        return OkHttpClient.Builder()
-            .cookieJar(okhttp3.JavaNetCookieJar(cookieManager))
-            .followRedirects(true)
-            .followSslRedirects(true)
-            .retryOnConnectionFailure(true)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(60, TimeUnit.SECONDS)
-            .apply {
-                network?.let { socketFactory(it.socketFactory) }
-            }
-            .build()
-    }
-
     private val gson = Gson()
-
-    private fun getCsrfToken(): String {
-        var lastError: Exception? = null
-        repeat(3) { attempt ->
-            try {
-                val request = Request.Builder()
-                    .url("https://student.kalasalingam.ac.in/login")
-                    .get()
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                    .build()
-                val response = client.newCall(request).execute()
-                val html = response.body?.string() ?: ""
-                val match = Regex("""name="csrf-token"\s+content="(.+?)"""").find(html)
-                    ?: Regex("""name="_token".*?value="(.+?)"""").find(html)
-                val token = match?.groupValues?.get(1) ?: ""
-                Log.d(TAG, "CSRF token attempt ${attempt + 1}: ${token.take(10)}...")
-                if (token.isNotEmpty()) return token
-            } catch (e: Exception) {
-                lastError = e
-                Thread.sleep(500L * (attempt + 1))
-            }
-        }
-        throw lastError ?: Exception("Failed to get CSRF token")
-    }
 
     private fun resolveSisUrl(url: String): String {
         if (url.startsWith("http://") || url.startsWith("https://")) return url
@@ -219,23 +164,25 @@ class SISScraper(private val context: Context) {
         }.toList()
     }
 
-    fun getSubjectAttendanceHistory(detailsUrl: String): SisResult<List<SisAttendanceHistory>> {
+    suspend fun getSubjectAttendanceHistory(detailsUrl: String): SisResult<List<SisAttendanceHistory>> {
         return try {
             if (detailsUrl.isBlank()) return SisResult.Success(emptyList())
 
             val resolvedUrl = resolveSisUrl(detailsUrl)
-            val request = Request.Builder()
-                .url(resolvedUrl)
-                .get()
-                .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                .header("Referer", "https://student.kalasalingam.ac.in/semester/attendance")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                .build()
+            val response = sessionProvider.fetch(
+                url = resolvedUrl,
+                headers = mapOf(
+                    "Accept" to "application/json, text/javascript, */*; q=0.01",
+                    "Referer" to "https://student.kalasalingam.ac.in/semester/attendance",
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
+                )
+            )
+            val body = when (response) {
+                is SisResult.Success -> response.data
+                is SisResult.Error -> return response
+            }
 
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: ""
-
-            if (response.code == 302 || body.contains("/login")) {
+            if (body.contains("/login", ignoreCase = true) || body.contains("name=\"register_no\"", ignoreCase = true)) {
                 return SisResult.Error("Session expired. Please login again.")
             }
 
@@ -244,24 +191,19 @@ class SISScraper(private val context: Context) {
             val initialDataSize = initialObj?.getAsJsonArray("data")?.size() ?: 0
             val totalRecords = initialObj?.get("recordsTotal")?.asInt ?: initialDataSize
             if (totalRecords > initialDataSize && totalRecords > 0) {
-                val expandedUrl = response.request.url.newBuilder()
-                    .setQueryParameter("start", "0")
-                    .setQueryParameter("length", totalRecords.toString())
-                    .build()
-
-                val expandedRequest = Request.Builder()
-                    .url(expandedUrl)
-                    .get()
-                    .header("X-Requested-With", "XMLHttpRequest")
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("Referer", "https://student.kalasalingam.ac.in/semester/attendance")
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                    .build()
-
-                val expandedResponse = client.newCall(expandedRequest).execute()
-                val expandedBody = expandedResponse.body?.string() ?: ""
-                if (expandedResponse.isSuccessful && expandedBody.isNotBlank() && !expandedBody.contains("/login")) {
-                    bodyToParse = expandedBody
+                val separator = if (resolvedUrl.contains("?")) "&" else "?"
+                val expandedUrl = "$resolvedUrl${separator}start=0&length=$totalRecords"
+                val expandedResponse = sessionProvider.fetch(
+                    url = expandedUrl,
+                    headers = mapOf(
+                        "X-Requested-With" to "XMLHttpRequest",
+                        "Accept" to "application/json, text/javascript, */*; q=0.01",
+                        "Referer" to "https://student.kalasalingam.ac.in/semester/attendance",
+                        "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
+                    )
+                )
+                if (expandedResponse is SisResult.Success && expandedResponse.data.isNotBlank() && !expandedResponse.data.contains("/login")) {
+                    bodyToParse = expandedResponse.data
                 }
             }
 
@@ -280,60 +222,31 @@ class SISScraper(private val context: Context) {
         }
     }
 
-    fun login(registerNo: String, password: String): SisResult<Unit> {
-        return try {
-            // Clear existing cookies for fresh session
-            cookieManager.cookieStore.removeAll()
+    suspend fun login(registerNo: String, password: String): SisResult<Unit> =
+        sessionProvider.login(registerNo, password)
 
-            val token = getCsrfToken()
-            if (token.isEmpty()) {
-                return SisResult.Error("Could not get login token. Check your internet connection.")
-            }
-
-            val formBody = FormBody.Builder()
-                .add("_token", token)
-                .add("register_no", registerNo)
-                .add("password", password)
-                .build()
-
-            val request = Request.Builder()
-                .url("https://student.kalasalingam.ac.in/login")
-                .post(formBody)
-                .header("Referer", "https://student.kalasalingam.ac.in/login")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                .build()
-
-            val response = client.newCall(request).execute()
-            val finalUrl = response.request.url.toString()
-            Log.d(TAG, "Login redirect URL: $finalUrl")
-
-            if (finalUrl.contains("login")) {
-                SisResult.Error("Invalid register number or password.")
-            } else {
-                SisResult.Success(Unit)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Login error", e)
-            SisResult.Error("Login failed: ${e.message}")
-        }
+    suspend fun clearSession() {
+        sessionProvider.clearSession()
     }
 
-    fun getAttendance(): SisResult<List<SisAttendance>> {
+    suspend fun getAttendance(): SisResult<List<SisAttendance>> {
         return try {
-            val request = Request.Builder()
-                .url("https://student.kalasalingam.ac.in/attendance-details?draw=1&start=0&length=200&search[value]=&search[regex]=false")
-                .get()
-                .header("X-Requested-With", "XMLHttpRequest")
-                .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                .header("Referer", "https://student.kalasalingam.ac.in/semester/attendance")
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                .build()
+            val response = sessionProvider.fetch(
+                url = "https://student.kalasalingam.ac.in/attendance-details?draw=1&start=0&length=200&search[value]=&search[regex]=false",
+                headers = mapOf(
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Accept" to "application/json, text/javascript, */*; q=0.01",
+                    "Referer" to "https://student.kalasalingam.ac.in/semester/attendance",
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
+                )
+            )
 
-            val response = client.newCall(request).execute()
-            val body = response.body?.string() ?: "{}"
-            Log.d(TAG, "Attendance response code: ${response.code}")
+            val body = when (response) {
+                is SisResult.Success -> response.data
+                is SisResult.Error -> return response
+            }
 
-            if (response.code == 302 || body.contains("<!DOCTYPE html>")) {
+            if (body.contains("<!DOCTYPE html>", ignoreCase = true) || body.contains("/login", ignoreCase = true)) {
                 return SisResult.Error("Session expired. Please login again.")
             }
 

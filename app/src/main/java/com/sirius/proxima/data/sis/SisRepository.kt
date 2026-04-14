@@ -36,6 +36,7 @@ class SisRepository(
         }
 
     suspend fun logout() {
+        scraper.clearSession()
         settingsDataStore.clearSisCredentials()
     }
 }
