@@ -22,7 +22,7 @@ class WebViewSisSessionProvider(
 ) : SisSessionProvider {
 
     private companion object {
-        private const val BASE_URL = "https://student.kalasalingam.ac.in"
+        private const val BASE_URL = "https://sis.kalasalingam.ac.in"
         private const val LOGIN_URL = "$BASE_URL/login"
     }
 
@@ -513,7 +513,7 @@ class WebViewSisSessionProvider(
                     val ready = payload.optString("ready")
                     val text = payload.optString("text")
                     val html = payload.optString("html")
-                    val onTarget = href.contains("student.kalasalingam.ac.in") && href.contains("attendance-details")
+                    val onTarget = href.contains("sis.kalasalingam.ac.in") && href.contains("attendance-details")
                     debug("runFetchFlow() fallback poll href=$href ready=$ready textLen=${text.length} attemptsLeft=$attemptsLeft")
 
                     if (onTarget && ready.equals("complete", ignoreCase = true) && (text.isNotBlank() || html.isNotBlank())) {

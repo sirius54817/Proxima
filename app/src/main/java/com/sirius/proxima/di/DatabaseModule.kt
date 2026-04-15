@@ -12,7 +12,6 @@ import com.sirius.proxima.data.repository.TimetableRepository
 
 import com.sirius.proxima.data.sis.SISScraper
 import com.sirius.proxima.data.sis.SisRepository
-import com.sirius.proxima.data.sis.WebViewSisSessionProvider
 
 object ServiceLocator {
 
@@ -78,9 +77,7 @@ object ServiceLocator {
     fun getSisRepository(context: Context): SisRepository {
         return sisRepository ?: synchronized(this) {
             sisRepository ?: SisRepository(
-                SISScraper(
-                    WebViewSisSessionProvider(context.applicationContext)
-                ),
+                SISScraper(context.applicationContext),
                 getSettingsDataStore(context)
             ).also { sisRepository = it }
         }
