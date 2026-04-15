@@ -41,7 +41,6 @@ class WebViewSisSessionProvider(
     private fun debug(message: String) {
         val line = "[SIS-WebView] $message"
         Log.d("SISWebView", line)
-        SisWebViewDebugLog.add(line)
     }
 
     override suspend fun login(registerNo: String, password: String): SisResult<Unit> {
@@ -584,7 +583,7 @@ class WebViewSisSessionProvider(
 
     private fun isAllowedUrl(uri: Uri): Boolean {
         val host = uri.host?.lowercase() ?: return false
-        return host == "student.kalasalingam.ac.in" || host.endsWith(".kalasalingam.ac.in")
+        return host == "sis.kalasalingam.ac.in" || host.endsWith(".kalasalingam.ac.in")
     }
 
     private fun normalizeUrl(url: String): String? {

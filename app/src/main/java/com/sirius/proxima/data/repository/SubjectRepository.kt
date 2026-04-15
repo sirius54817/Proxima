@@ -27,6 +27,10 @@ class SubjectRepository(
 
     suspend fun updateSubject(subject: Subject) = subjectDao.updateSubject(subject)
 
+    suspend fun hideSubject(id: Int) = subjectDao.hideSubject(id)
+
+    suspend fun unhideSubject(id: Int) = subjectDao.unhideSubject(id)
+
     suspend fun deleteSubject(subject: Subject) {
         timetableEntryDao.markSubjectDeleted(subject.id)
         subjectDao.deleteSubject(subject)

@@ -19,10 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -33,7 +31,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import android.widget.Toast
 import com.sirius.proxima.data.sis.SisAttendance
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.ui.theme.*
@@ -48,14 +45,6 @@ fun SisScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val savedRegisterNo by viewModel.savedRegisterNo.collectAsStateWithLifecycle()
-    val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
-
-    fun copyDebugLog() {
-        val latest = viewModel.getDebugLogSnapshot()
-        clipboardManager.setText(AnnotatedString(latest))
-        Toast.makeText(context, "SIS debug log copied", Toast.LENGTH_SHORT).show()
-    }
 
     AnimatedContent(
         targetState = uiState,
@@ -79,17 +68,14 @@ fun SisScreen(
                 SisAttendanceScreen(
                     attendance = state.attendance,
                     onRefresh = { viewModel.refresh() },
-                    onLogout = { viewModel.logout() },
-                    onCopyLog = { copyDebugLog() }
+                    onLogout = { viewModel.logout() }
                 )
             }
             is SisUiState.Error -> {
                 SisErrorScreen(
                     message = state.message,
                     onRetry = { viewModel.refresh() },
-                    onLogout = { viewModel.logout() },
-                    onCopyLog = { copyDebugLog() },
-                    onClearLog = { viewModel.clearDebugLog() }
+                    onLogout = { viewModel.logout() }
                 )
             }
         }
@@ -230,9 +216,7 @@ private fun SisLoadingScreen(message: String) {
 private fun SisErrorScreen(
     message: String,
     onRetry: () -> Unit,
-    onLogout: () -> Unit,
-    onCopyLog: () -> Unit,
-    onClearLog: () -> Unit
+    onLogout: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -281,28 +265,6 @@ private fun SisErrorScreen(
                         Text("Re-login", color = DangerRed)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = onCopyLog,
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Border),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Copy Log", color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    OutlinedButton(
-                        onClick = onClearLog,
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Border),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Clear Log", color = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
             }
         }
     }
@@ -312,8 +274,7 @@ private fun SisErrorScreen(
 private fun SisAttendanceScreen(
     attendance: List<SisAttendance>,
     onRefresh: () -> Unit,
-    onLogout: () -> Unit,
-    onCopyLog: () -> Unit
+    onLogout: () -> Unit
 ) {
     val overall = if (attendance.isNotEmpty()) {
         val totalPresent = attendance.sumOf { it.present + it.onDuty + it.medicalLeave }
@@ -350,9 +311,6 @@ private fun SisAttendanceScreen(
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    IconButton(onClick = onCopyLog) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy SIS debug log", tint = MutedForeground)
-                    }
                     IconButton(onClick = onRefresh) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MutedForeground)
                     }
@@ -530,8 +488,7 @@ private fun SisAttendanceScreenPreview() {
                 SisAttendance("MAT201", "Discrete Mathematics", "3", 30, 18, 10, 2, 0, 66.6, "")
             ),
             onRefresh = {},
-            onLogout = {},
-            onCopyLog = {}
+            onLogout = {}
         )
     }
 }

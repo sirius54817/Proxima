@@ -36,7 +36,7 @@ import com.sirius.proxima.data.model.TimetableEntry
         NoteChecklistItem::class,
         PlannerEvent::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class ProximaDatabase : RoomDatabase() {

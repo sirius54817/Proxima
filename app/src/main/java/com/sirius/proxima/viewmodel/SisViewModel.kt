@@ -12,8 +12,6 @@ import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.sis.SisAttendance
 import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
-import com.sirius.proxima.data.sis.SIS_NETWORK_UNAVAILABLE
-import com.sirius.proxima.data.sis.SisWebViewDebugLog
 import com.sirius.proxima.di.ServiceLocator
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -66,9 +64,6 @@ class SisViewModel(
     private val _uiState = MutableStateFlow<SisUiState>(SisUiState.LoggedOut)
     val uiState: StateFlow<SisUiState> = _uiState.asStateFlow()
 
-    private val _debugLogText = MutableStateFlow(SisWebViewDebugLog.snapshot())
-    val debugLogText: StateFlow<String> = _debugLogText.asStateFlow()
-
     val savedRegisterNo: StateFlow<String?> = settingsDataStore.sisRegisterNo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -109,11 +104,9 @@ class SisViewModel(
                 subjectRepository.syncSubjectsFromSis(result.data)
                 _uiState.value = SisUiState.Loaded(result.data)
                 syncSubjectHistoryFromSis(result.data)
-                refreshDebugLog()
             }
             is SisResult.Error -> {
-                _uiState.value = SisUiState.Error(mapSisErrorMessage(result.message))
-                refreshDebugLog()
+                _uiState.value = SisUiState.Error(result.message)
             }
         }
     }
@@ -126,7 +119,6 @@ class SisViewModel(
                     subjectRepository.syncSubjectsFromSis(result.data)
                     _uiState.value = SisUiState.Loaded(result.data)
                     syncSubjectHistoryFromSis(result.data)
-                    refreshDebugLog()
                 }
                 is SisResult.Error -> {
                     // Session may have expired — re-login with saved credentials
@@ -135,37 +127,19 @@ class SisViewModel(
                     if (regNo != null && password != null) {
                         fetchAttendance(regNo, password)
                     } else {
-                        _uiState.value = SisUiState.Error(mapSisErrorMessage(result.message))
-                        refreshDebugLog()
+                        _uiState.value = SisUiState.Error(result.message)
                     }
                 }
             }
         }
     }
 
-    private fun mapSisErrorMessage(rawMessage: String): String {
-        if (!rawMessage.startsWith("$SIS_NETWORK_UNAVAILABLE:")) return rawMessage
-        return rawMessage.removePrefix("$SIS_NETWORK_UNAVAILABLE:").ifBlank { rawMessage }
-    }
-
     fun logout() {
         viewModelScope.launch {
             sisRepository.logout()
             _uiState.value = SisUiState.LoggedOut
-            refreshDebugLog()
         }
     }
-
-    fun refreshDebugLog() {
-        _debugLogText.value = SisWebViewDebugLog.snapshot()
-    }
-
-    fun clearDebugLog() {
-        SisWebViewDebugLog.clear()
-        refreshDebugLog()
-    }
-
-    fun getDebugLogSnapshot(): String = SisWebViewDebugLog.snapshot()
 
     companion object {
         fun factory(application: Application): ViewModelProvider.Factory {

@@ -61,6 +61,7 @@ fun HomeScreen(
     var editingSubject by remember { mutableStateOf<Subject?>(null) }
     var deletingSubject by remember { mutableStateOf<Subject?>(null) }
     var showCustomEventDialog by remember { mutableStateOf(false) }
+    var isSubjectEditMode by remember { mutableStateOf(false) }
 
     Scaffold(
         floatingActionButton = {
@@ -84,6 +85,15 @@ fun HomeScreen(
             onMarkPresent = { viewModel.markPresent(it) },
             onMarkAbsent = { viewModel.markAbsent(it) },
             onMarkOnDuty = { viewModel.markOnDuty(it) },
+            onHide = { viewModel.hideSubject(it) },
+            onUnhide = { viewModel.unhideSubject(it) },
+            isSubjectEditMode = isSubjectEditMode,
+            onEnterSubjectEditMode = {
+                isSubjectEditMode = true
+            },
+            onExitSubjectEditMode = {
+                isSubjectEditMode = false
+            },
             onEdit = { editingSubject = it },
             onDelete = { deletingSubject = it },
             onSubjectClick = { onNavigateToSubjectHistory(it.id) },
@@ -167,6 +177,11 @@ fun HomeScreenContent(
     onMarkPresent: (Int) -> Unit,
     onMarkAbsent: (Int) -> Unit,
     onMarkOnDuty: (Int) -> Unit,
+    onHide: (Int) -> Unit,
+    onUnhide: (Int) -> Unit,
+    isSubjectEditMode: Boolean,
+    onEnterSubjectEditMode: () -> Unit,
+    onExitSubjectEditMode: () -> Unit,
     onEdit: (Subject) -> Unit,
     onDelete: (Subject) -> Unit,
     onSubjectClick: (Subject) -> Unit,
@@ -353,16 +368,27 @@ fun HomeScreenContent(
         // Subjects Section
         item {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "Subjects",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Subjects",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (isSubjectEditMode) {
+                    TextButton(onClick = onExitSubjectEditMode) { Text("Done") }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        if (subjects.isEmpty()) {
+        val visibleSubjects = if (isSubjectEditMode) subjects else subjects.filter { !it.isHidden }
+
+        if (visibleSubjects.isEmpty()) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -379,7 +405,7 @@ fun HomeScreenContent(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No subjects added yet. Tap + to add one.",
+                            text = if (isSubjectEditMode) "No subjects found." else "No subjects added yet. Tap + to add one.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MutedForeground
                         )
@@ -387,14 +413,25 @@ fun HomeScreenContent(
                 }
             }
         } else {
-            items(subjects, key = { "subject_${it.id}" }) { subject ->
+            items(visibleSubjects, key = { "subject_${it.id}" }) { subject ->
                 SubjectCard(
                     subject = subject,
                     onMarkPresent = { onMarkPresent(subject.id) },
                     onMarkAbsent = { onMarkAbsent(subject.id) },
                     onMarkOnDuty = { onMarkOnDuty(subject.id) },
+                    onHide = {
+                        onHide(subject.id)
+                    },
+                    onUnhide = {
+                        onUnhide(subject.id)
+                    },
+                    onDelete = { onDelete(subject) },
                     onEdit = { onEdit(subject) },
-                    onClick = { onSubjectClick(subject) }
+                    onClick = { onSubjectClick(subject) },
+                    onLongPress = {
+                        if (!isSubjectEditMode) onEnterSubjectEditMode()
+                    },
+                    isInEditMode = isSubjectEditMode
                 )
             }
         }
@@ -586,6 +623,11 @@ fun HomeScreenContentPreview() {
             onMarkPresent = {},
             onMarkAbsent = {},
             onMarkOnDuty = {},
+            onHide = {},
+            onUnhide = {},
+            isSubjectEditMode = false,
+            onEnterSubjectEditMode = {},
+            onExitSubjectEditMode = {},
             onEdit = {},
             onDelete = {},
             onSubjectClick = {},

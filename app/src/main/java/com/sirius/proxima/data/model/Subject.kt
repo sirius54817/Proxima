@@ -12,7 +12,8 @@ data class Subject(
     val attendedClasses: Int = 0,
     val sisPresent: Int? = null,
     val sisAbsent: Int? = null,
-    val sisOnDuty: Int? = null
+    val sisOnDuty: Int? = null,
+    val isHidden: Boolean = false
 ) {
     val percentage: Float
         get() = if (totalClasses > 0) (attendedClasses.toFloat() / totalClasses.toFloat()) * 100f else 0f

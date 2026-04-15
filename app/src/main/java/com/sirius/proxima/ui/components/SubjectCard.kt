@@ -1,19 +1,23 @@
 package com.sirius.proxima.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WorkHistory
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.sirius.proxima.data.model.Subject
@@ -29,132 +33,239 @@ fun SubjectCard(
     onMarkPresent: () -> Unit,
     onMarkAbsent: () -> Unit,
     onMarkOnDuty: () -> Unit,
+    onHide: () -> Unit,
+    onUnhide: () -> Unit,
+    onDelete: () -> Unit,
     onEdit: () -> Unit,
     onClick: () -> Unit,
+    onLongPress: () -> Unit,
+    isInEditMode: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val isHidden = subject.isHidden
     val isAbove75 = subject.percentage >= 75f
-    val percentColor = if (isAbove75) AttendanceGreen else AttendanceRed
+    val percentColor = if (isHidden) MutedForeground else if (isAbove75) AttendanceGreen else AttendanceRed
+    val strike = if (isHidden) TextDecoration.LineThrough else TextDecoration.None
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Border),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = subject.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = percentColor,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${subject.attendedClasses}/${subject.totalClasses} classes • ${"%.1f".format(subject.percentage)}%",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MutedForeground
-                    )
-                }
-
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MutedForeground,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Attendance message
-            Text(
-                text = if (isAbove75) {
-                    if (subject.canMissClasses > 0) "You can miss ${subject.canMissClasses} more class${if (subject.canMissClasses > 1) "es" else ""}"
-                    else "You're at exactly 75% — don't miss any!"
-                } else {
-                    if (subject.needToAttendClasses > 0) "Attend ${subject.needToAttendClasses} more class${if (subject.needToAttendClasses > 1) "es" else ""} to reach 75%"
-                    else "Attend more classes to reach 75%"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = percentColor.copy(alpha = 0.8f)
+    Box(modifier = modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = {
+                        if (!isInEditMode && !isHidden) onClick()
+                    },
+                    onLongClick = onLongPress
+                ),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, if (isHidden) Border.copy(alpha = 0.5f) else Border),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isHidden) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                else MaterialTheme.colorScheme.surfaceContainer
             )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Action buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = onMarkPresent,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, AttendanceGreen.copy(alpha = 0.5f)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Present",
-                        tint = AttendanceGreen,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Present", color = AttendanceGreen, style = MaterialTheme.typography.labelLarge)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = subject.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = percentColor,
+                            fontWeight = FontWeight.SemiBold,
+                            textDecoration = strike
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${subject.attendedClasses}/${subject.totalClasses} classes • ${"%.1f".format(subject.percentage)}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MutedForeground,
+                            textDecoration = strike
+                        )
+                    }
+
+                    if (!isHidden) {
+                        IconButton(onClick = onEdit) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MutedForeground,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedButton(
-                    onClick = onMarkOnDuty,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, Border),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.WorkHistory,
-                        contentDescription = "On Duty",
-                        tint = MutedForeground,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("On Duty", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = if (isHidden) {
+                        "Hidden subject. Long-press to delete or tap Unhide to restore."
+                    } else if (isAbove75) {
+                        if (subject.canMissClasses > 0) "You can miss ${subject.canMissClasses} more class${if (subject.canMissClasses > 1) "es" else ""}"
+                        else "You're at exactly 75% — don't miss any!"
+                    } else {
+                        if (subject.needToAttendClasses > 0) "Attend ${subject.needToAttendClasses} more class${if (subject.needToAttendClasses > 1) "es" else ""} to reach 75%"
+                        else "Attend more classes to reach 75%"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = percentColor.copy(alpha = 0.8f),
+                    textDecoration = strike
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (isHidden && !isInEditMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = onUnhide,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Border),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "Unhide",
+                                tint = MutedForeground,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Unhide", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                } else if (!isInEditMode) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = onMarkPresent,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, AttendanceGreen.copy(alpha = 0.5f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Present",
+                                tint = AttendanceGreen,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Present", color = AttendanceGreen, style = MaterialTheme.typography.labelLarge)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        OutlinedButton(
+                            onClick = onMarkOnDuty,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Border),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WorkHistory,
+                                contentDescription = "On Duty",
+                                tint = MutedForeground,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("On Duty", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        OutlinedButton(
+                            onClick = onMarkAbsent,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, AttendanceRed.copy(alpha = 0.5f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Absent",
+                                tint = AttendanceRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Absent", color = AttendanceRed, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                if (isInEditMode) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isHidden) {
+                            OutlinedButton(
+                                onClick = onUnhide,
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Border),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Unhide",
+                                    tint = MutedForeground,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Unhide", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = onHide,
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Border),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.VisibilityOff,
+                                    contentDescription = "Hide",
+                                    tint = MutedForeground,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Hide", color = MutedForeground, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
 
-                OutlinedButton(
-                    onClick = onMarkAbsent,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, AttendanceRed.copy(alpha = 0.5f)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Absent",
-                        tint = AttendanceRed,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Absent", color = AttendanceRed, style = MaterialTheme.typography.labelLarge)
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        OutlinedButton(
+                            onClick = onDelete,
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.45f)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Delete", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
         }
@@ -175,8 +286,13 @@ fun SubjectCardPreview() {
             onMarkPresent = {},
             onMarkAbsent = {},
             onMarkOnDuty = {},
+            onHide = {},
+            onUnhide = {},
+            onDelete = {},
             onEdit = {},
-            onClick = {}
+            onClick = {},
+            onLongPress = {},
+            isInEditMode = false
         )
     }
 }
@@ -195,8 +311,13 @@ fun SubjectCardLowAttendancePreview() {
             onMarkPresent = {},
             onMarkAbsent = {},
             onMarkOnDuty = {},
+            onHide = {},
+            onUnhide = {},
+            onDelete = {},
             onEdit = {},
-            onClick = {}
+            onClick = {},
+            onLongPress = {},
+            isInEditMode = true
         )
     }
 }

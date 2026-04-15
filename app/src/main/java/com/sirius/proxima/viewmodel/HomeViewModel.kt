@@ -18,7 +18,6 @@ import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
-import com.sirius.proxima.data.sis.SIS_NETWORK_UNAVAILABLE
 import com.sirius.proxima.di.ServiceLocator
 import com.sirius.proxima.notification.AlarmScheduler
 import kotlinx.coroutines.flow.Flow
@@ -203,6 +202,18 @@ class HomeViewModel(
         }
     }
 
+    fun hideSubject(subjectId: Int) {
+        viewModelScope.launch {
+            subjectRepository.hideSubject(subjectId)
+        }
+    }
+
+    fun unhideSubject(subjectId: Int) {
+        viewModelScope.launch {
+            subjectRepository.unhideSubject(subjectId)
+        }
+    }
+
     fun markPresent(subjectId: Int) {
         viewModelScope.launch {
             subjectRepository.markPresent(subjectId)
@@ -267,7 +278,7 @@ class HomeViewModel(
                 val attendance = when (attendanceResult) {
                     is SisResult.Success -> attendanceResult.data
                     is SisResult.Error -> {
-                        _historyPortalError.value = mapSisErrorMessage(attendanceResult.message)
+                        _historyPortalError.value = attendanceResult.message
                         return@launch
                     }
                 }
@@ -302,11 +313,11 @@ class HomeViewModel(
                     }
 
                     is SisResult.Error -> {
-                        _historyPortalError.value = mapSisErrorMessage(historyResult.message)
+                        _historyPortalError.value = historyResult.message
                     }
                 }
             } catch (e: Exception) {
-                _historyPortalError.value = mapSisErrorMessage(e.message ?: "Unable to load portal history")
+                _historyPortalError.value = e.message ?: "Unable to load portal history"
             } finally {
                 _historyPortalLoadingSubjectId.value = null
             }
@@ -366,10 +377,6 @@ class HomeViewModel(
         return subjects.value.find { it.id == subjectId }?.percentage ?: 0f
     }
 
-    private fun mapSisErrorMessage(rawMessage: String): String {
-        if (!rawMessage.startsWith("$SIS_NETWORK_UNAVAILABLE:")) return rawMessage
-        return rawMessage.removePrefix("$SIS_NETWORK_UNAVAILABLE:").ifBlank { rawMessage }
-    }
 
     private fun loadTomorrowHolidayText(tomorrow: LocalDate): String? {
         val prefs = getApplication<Application>().getSharedPreferences(HOLIDAY_PREFS, Application.MODE_PRIVATE)
