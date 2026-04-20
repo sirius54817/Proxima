@@ -40,6 +40,8 @@ fun SubjectCard(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     isInEditMode: Boolean,
+    isSelected: Boolean = false,
+    onSelectToggle: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isHidden = subject.isHidden
@@ -53,7 +55,11 @@ fun SubjectCard(
                 .fillMaxWidth()
                 .combinedClickable(
                     onClick = {
-                        if (!isInEditMode && !isHidden) onClick()
+                        if (isInEditMode && onSelectToggle != null) {
+                            onSelectToggle()
+                        } else if (!isHidden) {
+                            onClick()
+                        }
                     },
                     onLongClick = onLongPress
                 ),
@@ -87,7 +93,9 @@ fun SubjectCard(
                         )
                     }
 
-                    if (!isHidden) {
+                    if (isInEditMode && onSelectToggle != null) {
+                        Checkbox(checked = isSelected, onCheckedChange = { onSelectToggle() })
+                    } else if (!isHidden) {
                         IconButton(onClick = onEdit) {
                             Icon(
                                 imageVector = Icons.Default.Edit,

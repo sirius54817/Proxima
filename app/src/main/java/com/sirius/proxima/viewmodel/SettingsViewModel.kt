@@ -1,6 +1,10 @@
 package com.sirius.proxima.viewmodel
 
 import android.app.Application
+import android.content.ContentValues
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -15,9 +19,14 @@ import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 import com.sirius.proxima.di.ServiceLocator
 import com.sirius.proxima.notification.AlarmScheduler
+import com.sirius.proxima.ui.components.DeleteAnimationBus
+import com.sirius.proxima.ui.theme.ThemeMode
 import com.sirius.proxima.worker.BackupScheduler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class SettingsViewModel(
     application: Application,
@@ -60,8 +69,23 @@ class SettingsViewModel(
     val showHomeWeeklyGoalProgress: StateFlow<Boolean> = settingsDataStore.showHomeWeeklyGoalProgress
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val appThemeMode: StateFlow<ThemeMode> = settingsDataStore.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.SYSTEM)
+
+    val useMaterial3: StateFlow<Boolean> = settingsDataStore.useMaterial3
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val useMaterialYou: StateFlow<Boolean> = settingsDataStore.useMaterialYou
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val developerMode: StateFlow<Boolean> = settingsDataStore.developerMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val _isBackingUp = MutableStateFlow(false)
     val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
+
+    private val _isDownloadingBackup = MutableStateFlow(false)
+    val isDownloadingBackup: StateFlow<Boolean> = _isDownloadingBackup.asStateFlow()
 
     private val _isClearing = MutableStateFlow(false)
     val isClearing: StateFlow<Boolean> = _isClearing.asStateFlow()
@@ -81,8 +105,14 @@ class SettingsViewModel(
     private val _isClearingCalendar = MutableStateFlow(false)
     val isClearingCalendar: StateFlow<Boolean> = _isClearingCalendar.asStateFlow()
 
+    private val _isClearingPdfs = MutableStateFlow(false)
+    val isClearingPdfs: StateFlow<Boolean> = _isClearingPdfs.asStateFlow()
+
     private val _calendarSyncMessage = MutableStateFlow<String?>(null)
     val calendarSyncMessage: StateFlow<String?> = _calendarSyncMessage.asStateFlow()
+
+    private val _backupDebugLog = MutableStateFlow("")
+    val backupDebugLog: StateFlow<String> = _backupDebugLog.asStateFlow()
 
     fun onVersionTapped() {
         viewModelScope.launch {
@@ -135,12 +165,40 @@ class SettingsViewModel(
         _calendarSyncMessage.value = null
     }
 
+    fun clearBackupDebugLog() {
+        _backupDebugLog.value = ""
+    }
+
+    private fun logBackup(message: String) {
+        val ts = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val line = "$ts  $message"
+        val merged = if (_backupDebugLog.value.isBlank()) line else "${_backupDebugLog.value}\n$line"
+        // Keep latest lines only to prevent unbounded growth.
+        _backupDebugLog.value = merged.lines().takeLast(120).joinToString("\n")
+    }
+
     fun setShowHomeSemesterProgress(show: Boolean) {
         viewModelScope.launch { settingsDataStore.setShowHomeSemesterProgress(show) }
     }
 
     fun setShowHomeWeeklyGoalProgress(show: Boolean) {
         viewModelScope.launch { settingsDataStore.setShowHomeWeeklyGoalProgress(show) }
+    }
+
+    fun setAppThemeMode(mode: ThemeMode) {
+        viewModelScope.launch { settingsDataStore.setThemeMode(mode) }
+    }
+
+    fun setUseMaterial3(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setUseMaterial3(enabled) }
+    }
+
+    fun setUseMaterialYou(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setUseMaterialYou(enabled) }
+    }
+
+    fun setDeveloperMode(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setDeveloperMode(enabled) }
     }
 
     fun syncTimetableToGoogleCalendar() {
@@ -229,10 +287,35 @@ class SettingsViewModel(
 
                 val deleted = CalendarSyncHelper.clearAppEvents(getApplication(), calendar.first)
                 _calendarSyncMessage.value = "Cleared $deleted app-created events from ${calendar.second}"
+                if (deleted > 0) {
+                    repeat(deleted.coerceIn(1, 6)) { DeleteAnimationBus.trigger() }
+                }
             } catch (e: Exception) {
                 _calendarSyncMessage.value = "Calendar clear failed: ${e.message ?: "Unknown error"}"
             } finally {
                 _isClearingCalendar.value = false
+            }
+        }
+    }
+
+    fun clearAllStudyPdfs() {
+        viewModelScope.launch {
+            _isClearingPdfs.value = true
+            try {
+                val pdfs = studyRepository.getStudyPdfsList()
+                pdfs.forEach { runCatching { java.io.File(it.filePath).delete() } }
+                studyRepository.deleteAllStudyPdfs()
+
+                if (settingsDataStore.isSignedIn.first()) {
+                    DriveBackupHelper.clearStudyPdfsFromBackup(getApplication())
+                }
+
+                _calendarSyncMessage.value = "All study PDFs deleted"
+                repeat(pdfs.size.coerceIn(1, 6)) { DeleteAnimationBus.trigger() }
+            } catch (e: Exception) {
+                _calendarSyncMessage.value = "Failed to clear PDFs: ${e.message ?: "Unknown error"}"
+            } finally {
+                _isClearingPdfs.value = false
             }
         }
     }
@@ -268,7 +351,19 @@ class SettingsViewModel(
 
     fun backupNow() {
         viewModelScope.launch {
+            logBackup("Backup Now tapped")
+            if (!settingsDataStore.isSignedIn.first()) {
+                logBackup("Blocked: user not signed in")
+                _calendarSyncMessage.value = "Sign in with Google first to use cloud backup"
+                return@launch
+            }
+            if (!DriveBackupHelper.canUseDriveBackup(getApplication())) {
+                logBackup("Blocked: Drive appData permission missing")
+                _calendarSyncMessage.value = "Drive permission missing. Please Sign Out and Sign In again"
+                return@launch
+            }
             _isBackingUp.value = true
+            logBackup("Preparing backup payload from local database")
             try {
                 val subjects = subjectRepository.getAllSubjectsList()
                 val entries = timetableRepository.getAllEntriesList()
@@ -293,11 +388,74 @@ class SettingsViewModel(
                 )
                 if (success) {
                     settingsDataStore.setLastBackupTime(System.currentTimeMillis())
+                    val warning = DriveBackupHelper.getLastError()
+                    if (!warning.isNullOrBlank()) {
+                        logBackup("Backup success with warning: $warning")
+                        _calendarSyncMessage.value = "Backup completed (without study files)"
+                    } else {
+                        logBackup("Backup upload success")
+                        _calendarSyncMessage.value = "Backup completed"
+                    }
+                } else {
+                    val reason = DriveBackupHelper.getLastError().orEmpty()
+                    logBackup("Backup upload failed (Drive helper returned false). $reason")
+                    _calendarSyncMessage.value = if (reason.isBlank()) {
+                        "Backup failed. Reconnect Google account and try again"
+                    } else {
+                        "Backup failed: $reason"
+                    }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                logBackup("Backup exception: ${e.message ?: "Unknown error"}")
+                _calendarSyncMessage.value = "Backup failed: ${e.message ?: "Unknown error"}"
             } finally {
                 _isBackingUp.value = false
+                logBackup("Backup flow finished")
+            }
+        }
+    }
+
+    fun downloadBackupFallback() {
+        viewModelScope.launch {
+            logBackup("Download Backup (Manual) tapped")
+            if (!settingsDataStore.isSignedIn.first()) {
+                logBackup("Blocked: user not signed in")
+                _calendarSyncMessage.value = "Sign in with Google first to download backup"
+                return@launch
+            }
+            if (!DriveBackupHelper.canUseDriveBackup(getApplication())) {
+                logBackup("Blocked: Drive appData permission missing")
+                _calendarSyncMessage.value = "Drive permission missing. Please Sign Out and Sign In again"
+                return@launch
+            }
+            _isDownloadingBackup.value = true
+            try {
+                val latest = DriveBackupHelper.downloadLatestBackup(getApplication())
+                if (latest == null) {
+                    val reason = DriveBackupHelper.getLastError().orEmpty()
+                    logBackup("No backup file found in Drive appData. $reason")
+                    _calendarSyncMessage.value = if (reason.isBlank()) {
+                        "No backup found in Drive"
+                    } else {
+                        "Download failed: $reason"
+                    }
+                    return@launch
+                }
+
+                val savedAt = saveBackupToDevice(fileName = latest.first, bytes = latest.second)
+                if (savedAt.isNullOrBlank()) {
+                    logBackup("Download received but writing to device failed")
+                    _calendarSyncMessage.value = "Backup download failed"
+                } else {
+                    logBackup("Backup downloaded successfully -> $savedAt")
+                    _calendarSyncMessage.value = "Backup downloaded: $savedAt"
+                }
+            } catch (e: Exception) {
+                logBackup("Download exception: ${e.message ?: "Unknown error"}")
+                _calendarSyncMessage.value = "Backup download failed: ${e.message ?: "Unknown error"}"
+            } finally {
+                _isDownloadingBackup.value = false
+                logBackup("Download flow finished")
             }
         }
     }
@@ -363,6 +521,34 @@ class SettingsViewModel(
         }
     }
 
+    private fun saveBackupToDevice(fileName: String, bytes: ByteArray): String? {
+        val app = getApplication<Application>()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = app.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "application/json")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Proxima")
+                put(MediaStore.Downloads.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+            runCatching {
+                resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return null
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                resolver.update(uri, values, null, null)
+                uri.toString()
+            }.getOrNull()
+        } else {
+            val dir = java.io.File(app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Proxima").apply { mkdirs() }
+            val out = java.io.File(dir, fileName)
+            runCatching {
+                out.writeBytes(bytes)
+                out.absolutePath
+            }.getOrNull()
+        }
+    }
+
     fun clearAllData() {
         viewModelScope.launch {
             _isClearing.value = true
@@ -387,6 +573,7 @@ class SettingsViewModel(
 
                 settingsDataStore.setLastBackupTime(0L)
                 settingsDataStore.setSisRestoredFromBackup(false)
+                repeat(6) { DeleteAnimationBus.trigger() }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {

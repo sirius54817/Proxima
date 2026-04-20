@@ -1,5 +1,6 @@
 package com.sirius.proxima.ui.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
@@ -8,9 +9,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.navigation.NavType
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,7 +36,7 @@ import com.sirius.proxima.ui.screen.StudyPdfScreen
 import com.sirius.proxima.ui.screen.StudyPdfViewerScreen
 import com.sirius.proxima.ui.screen.SubjectHistoryScreen
 import com.sirius.proxima.ui.screen.TimetableScreen
-import com.sirius.proxima.ui.theme.Border
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun ProximaNavGraph() {
@@ -119,6 +119,35 @@ fun ProximaNavGraph() {
                     onOpenFocusMode = { navController.navigate(Screen.FocusMode.route) }
                 )
             }
+            composable(Screen.AcademicTools.route) {
+                AcademicToolsScreen(
+                    onOpenGpa = { navController.navigate(Screen.GpaTool.route) },
+                    onOpenAssignments = { navController.navigate(Screen.AssignmentTool.route) },
+                    onOpenExams = { navController.navigate(Screen.ExamTool.route) },
+                    onOpenCredits = { navController.navigate(Screen.CreditTool.route) },
+                    onOpenHolidayCalendar = {
+                        navController.navigate(Screen.HolidayCalendar.route)
+                    }
+                )
+            }
+            composable(Screen.Sis.route) {
+                if (sisUnlocked) {
+                    SisScreen()
+                } else {
+                    LaunchedEffect(Unit) {
+                        navController.navigate(Screen.Settings.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                }
+            }
+            composable(Screen.Settings.route) {
+                SettingsScreen()
+            }
             composable(Screen.FocusMode.route) {
                 FocusModeScreen(onBack = { navController.popBackStack() })
             }
@@ -148,35 +177,6 @@ fun ProximaNavGraph() {
                     noteId = noteId,
                     onBack = { navController.popBackStack() }
                 )
-            }
-            composable(Screen.AcademicTools.route) {
-                AcademicToolsScreen(
-                    onOpenGpa = { navController.navigate(Screen.GpaTool.route) },
-                    onOpenAssignments = { navController.navigate(Screen.AssignmentTool.route) },
-                    onOpenExams = { navController.navigate(Screen.ExamTool.route) },
-                    onOpenCredits = { navController.navigate(Screen.CreditTool.route) },
-                    onOpenHolidayCalendar = {
-                        navController.navigate(Screen.HolidayCalendar.route)
-                    }
-                )
-            }
-            composable(Screen.Sis.route) {
-                if (sisUnlocked) {
-                    SisScreen()
-                } else {
-                    LaunchedEffect(Unit) {
-                        navController.navigate(Screen.Settings.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                }
-            }
-            composable(Screen.Settings.route) {
-                SettingsScreen()
             }
             composable(Screen.HolidayCalendar.route) {
                 HolidayCalendarScreen(onBack = { navController.popBackStack() })

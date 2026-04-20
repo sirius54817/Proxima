@@ -11,6 +11,7 @@ import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.repository.TimetableRepository
 import com.sirius.proxima.di.ServiceLocator
 import com.sirius.proxima.notification.AlarmScheduler
+import com.sirius.proxima.ui.components.DeleteAnimationBus
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -66,6 +67,7 @@ class TimetableViewModel(
         viewModelScope.launch {
             AlarmScheduler.cancelAlarm(getApplication(), entry.dayOfWeek, entry.hourSlot)
             timetableRepository.deleteEntry(entry)
+            DeleteAnimationBus.trigger()
         }
     }
 

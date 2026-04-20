@@ -29,11 +29,22 @@ class SubjectRepository(
 
     suspend fun hideSubject(id: Int) = subjectDao.hideSubject(id)
 
+    suspend fun hideSubjects(ids: List<Int>) {
+        if (ids.isEmpty()) return
+        subjectDao.hideSubjects(ids)
+    }
+
     suspend fun unhideSubject(id: Int) = subjectDao.unhideSubject(id)
 
     suspend fun deleteSubject(subject: Subject) {
         timetableEntryDao.markSubjectDeleted(subject.id)
         subjectDao.deleteSubject(subject)
+    }
+
+    suspend fun deleteSubjectsByIds(ids: List<Int>) {
+        if (ids.isEmpty()) return
+        timetableEntryDao.markSubjectsDeleted(ids)
+        subjectDao.deleteSubjectsByIds(ids)
     }
 
     suspend fun markPresent(id: Int) {

@@ -10,6 +10,7 @@ import com.sirius.proxima.data.model.AttendanceStatus
 import com.sirius.proxima.data.model.SubjectAttendanceRecord
 import com.sirius.proxima.data.repository.SubjectRepository
 import com.sirius.proxima.data.sis.SisAttendance
+import com.sirius.proxima.data.sis.SisDebugLogStore
 import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
 import com.sirius.proxima.di.ServiceLocator
@@ -67,8 +68,19 @@ class SisViewModel(
     val savedRegisterNo: StateFlow<String?> = settingsDataStore.sisRegisterNo
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val savedPassword: StateFlow<String?> = settingsDataStore.sisPassword
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val isLoggedIn: StateFlow<Boolean> = settingsDataStore.sisLoggedIn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val developerMode: StateFlow<Boolean> = settingsDataStore.developerMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val useMaterial3: StateFlow<Boolean> = settingsDataStore.useMaterial3
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val sisDebugLog: StateFlow<String> = SisDebugLogStore.log
 
     init {
         // Auto-login if credentials are saved
@@ -139,6 +151,10 @@ class SisViewModel(
             sisRepository.logout()
             _uiState.value = SisUiState.LoggedOut
         }
+    }
+
+    fun clearSisDebugLog() {
+        SisDebugLogStore.clear()
     }
 
     companion object {

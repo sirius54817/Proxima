@@ -11,11 +11,28 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.Semaphore
 import kotlin.coroutines.resume
+
+object SisDebugLogStore {
+    private val _log = MutableStateFlow("")
+    val log: StateFlow<String> = _log.asStateFlow()
+
+    fun append(line: String) {
+        val merged = if (_log.value.isBlank()) line else "${_log.value}\n$line"
+        _log.value = merged.lines().takeLast(200).joinToString("\n")
+    }
+
+    fun clear() {
+        _log.value = ""
+    }
+}
 
 class WebViewSisSessionProvider(
     context: Context
@@ -41,6 +58,7 @@ class WebViewSisSessionProvider(
     private fun debug(message: String) {
         val line = "[SIS-WebView] $message"
         Log.d("SISWebView", line)
+        SisDebugLogStore.append(line)
     }
 
     override suspend fun login(registerNo: String, password: String): SisResult<Unit> {

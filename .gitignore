@@ -28,3 +28,14 @@ app/build/
 # Kotlin build cache
 .kotlin/
 
+# Local Gradle user home and generated temp/cache content
+.gradle-user-home/
+.tmp/
+.sqlite-tmp/
+
+# IDE transient state
+.idea/copilotDiffState.xml
+
+# Archive artifacts
+*.tar.gz
+

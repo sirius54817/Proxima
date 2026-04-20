@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
+import com.sirius.proxima.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -35,6 +36,10 @@ class SettingsDataStore(
         val SHOW_HOME_EXAM_COUNTDOWN = booleanPreferencesKey("show_home_exam_countdown")
         val SHOW_HOME_WEEK_OVERVIEW = booleanPreferencesKey("show_home_week_overview")
         val SHOW_HOME_WEEKLY_GOAL_PROGRESS = booleanPreferencesKey("show_home_weekly_goal_progress")
+        val APP_THEME_MODE = stringPreferencesKey("app_theme_mode")
+        val USE_MATERIAL3 = booleanPreferencesKey("use_material3")
+        val USE_MATERIAL_YOU = booleanPreferencesKey("use_material_you")
+        val DEVELOPER_MODE = booleanPreferencesKey("developer_mode")
     }
 
     val googleAccountName: Flow<String?> = dataStore.data.map { it[GOOGLE_ACCOUNT_NAME] }
@@ -59,6 +64,12 @@ class SettingsDataStore(
     val showHomeExamCountdown: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_EXAM_COUNTDOWN] ?: true }
     val showHomeWeekOverview: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_WEEK_OVERVIEW] ?: true }
     val showHomeWeeklyGoalProgress: Flow<Boolean> = dataStore.data.map { it[SHOW_HOME_WEEKLY_GOAL_PROGRESS] ?: true }
+    val themeMode: Flow<ThemeMode> = dataStore.data.map { prefs ->
+        ThemeMode.fromStorage(prefs[APP_THEME_MODE])
+    }
+    val useMaterial3: Flow<Boolean> = dataStore.data.map { it[USE_MATERIAL3] ?: false }
+    val useMaterialYou: Flow<Boolean> = dataStore.data.map { it[USE_MATERIAL_YOU] ?: false }
+    val developerMode: Flow<Boolean> = dataStore.data.map { it[DEVELOPER_MODE] ?: false }
 
     suspend fun setSisCredentials(registerNo: String, password: String) {
         dataStore.edit {
@@ -143,6 +154,22 @@ class SettingsDataStore(
 
     suspend fun setShowHomeWeeklyGoalProgress(show: Boolean) {
         dataStore.edit { it[SHOW_HOME_WEEKLY_GOAL_PROGRESS] = show }
+    }
+
+    suspend fun setThemeMode(mode: ThemeMode) {
+        dataStore.edit { it[APP_THEME_MODE] = mode.storageValue }
+    }
+
+    suspend fun setUseMaterial3(enabled: Boolean) {
+        dataStore.edit { it[USE_MATERIAL3] = enabled }
+    }
+
+    suspend fun setUseMaterialYou(enabled: Boolean) {
+        dataStore.edit { it[USE_MATERIAL_YOU] = enabled }
+    }
+
+    suspend fun setDeveloperMode(enabled: Boolean) {
+        dataStore.edit { it[DEVELOPER_MODE] = enabled }
     }
 
     suspend fun setGoogleAccount(name: String, email: String) {

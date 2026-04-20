@@ -51,6 +51,8 @@ fun HomeScreen(
     val tomorrowHolidayText by viewModel.tomorrowHolidayText.collectAsStateWithLifecycle()
     val weeklyGoalMinutes by viewModel.weeklyGoalMinutes.collectAsStateWithLifecycle()
     val weeklyStudiedMinutes by viewModel.weeklyStudiedMinutes.collectAsStateWithLifecycle()
+    val bulkSubjectActionStatus by viewModel.bulkSubjectActionStatus.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Refresh date when screen is displayed
     LaunchedEffect(Unit) {
@@ -62,8 +64,17 @@ fun HomeScreen(
     var deletingSubject by remember { mutableStateOf<Subject?>(null) }
     var showCustomEventDialog by remember { mutableStateOf(false) }
     var isSubjectEditMode by remember { mutableStateOf(false) }
+    var selectedSubjectIds by remember { mutableStateOf(setOf<Int>()) }
+    var showDeleteSelectedDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(bulkSubjectActionStatus) {
+        val message = bulkSubjectActionStatus ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearBulkSubjectActionStatus()
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showAddDialog = true },
@@ -93,6 +104,24 @@ fun HomeScreen(
             },
             onExitSubjectEditMode = {
                 isSubjectEditMode = false
+                selectedSubjectIds = emptySet()
+            },
+            selectedSubjectIds = selectedSubjectIds,
+            onToggleSubjectSelection = { subjectId ->
+                selectedSubjectIds = if (selectedSubjectIds.contains(subjectId)) {
+                    selectedSubjectIds - subjectId
+                } else {
+                    selectedSubjectIds + subjectId
+                }
+            },
+            onSelectAllSubjectIds = { ids -> selectedSubjectIds = ids },
+            onClearSubjectSelection = { selectedSubjectIds = emptySet() },
+            onHideSelected = {
+                viewModel.hideSubjects(selectedSubjectIds.toList())
+                selectedSubjectIds = emptySet()
+            },
+            onDeleteSelected = {
+                showDeleteSelectedDialog = true
             },
             onEdit = { editingSubject = it },
             onDelete = { deletingSubject = it },
@@ -165,6 +194,22 @@ fun HomeScreen(
         )
     }
 
+    if (showDeleteSelectedDialog) {
+        ConfirmDialog(
+            title = "Delete Subjects",
+            message = "Delete ${selectedSubjectIds.size} selected subject(s)? Timetable entries for these subjects will show as [Deleted Subject].",
+            confirmText = "Delete",
+            isDangerous = true,
+            onConfirm = {
+                viewModel.deleteSubjects(selectedSubjectIds.toList())
+                selectedSubjectIds = emptySet()
+                showDeleteSelectedDialog = false
+                isSubjectEditMode = false
+            },
+            onDismiss = { showDeleteSelectedDialog = false }
+        )
+    }
+
 }
 
 @Composable
@@ -182,6 +227,12 @@ fun HomeScreenContent(
     isSubjectEditMode: Boolean,
     onEnterSubjectEditMode: () -> Unit,
     onExitSubjectEditMode: () -> Unit,
+    selectedSubjectIds: Set<Int>,
+    onToggleSubjectSelection: (Int) -> Unit,
+    onSelectAllSubjectIds: (Set<Int>) -> Unit,
+    onClearSubjectSelection: () -> Unit,
+    onHideSelected: () -> Unit,
+    onDeleteSelected: () -> Unit,
     onEdit: (Subject) -> Unit,
     onDelete: (Subject) -> Unit,
     onSubjectClick: (Subject) -> Unit,
@@ -380,10 +431,62 @@ fun HomeScreenContent(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 if (isSubjectEditMode) {
-                    TextButton(onClick = onExitSubjectEditMode) { Text("Done") }
+                    TextButton(onClick = {
+                        onClearSubjectSelection()
+                        onExitSubjectEditMode()
+                    }) { Text("Done") }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+
+            if (isSubjectEditMode) {
+                val hasSelection = selectedSubjectIds.isNotEmpty()
+                val allSubjectIds = subjects.map { it.id }.toSet()
+                val allSelected = allSubjectIds.isNotEmpty() && selectedSubjectIds.size == allSubjectIds.size
+                Text(
+                    text = if (hasSelection) "${selectedSubjectIds.size} selected" else "Tap subjects to select",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MutedForeground
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (allSelected) onClearSubjectSelection() else onSelectAllSubjectIds(allSubjectIds)
+                        },
+                        enabled = allSubjectIds.isNotEmpty(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (allSelected) "Clear all" else "Select all")
+                    }
+                    OutlinedButton(
+                        onClick = onHideSelected,
+                        enabled = hasSelection,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Hide selected")
+                    }
+                    OutlinedButton(
+                        onClick = onDeleteSelected,
+                        enabled = hasSelection,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text(
+                            text = "Delete selected",
+                            color = if (hasSelection) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
 
         val visibleSubjects = if (isSubjectEditMode) subjects else subjects.filter { !it.isHidden }
@@ -430,8 +533,11 @@ fun HomeScreenContent(
                     onClick = { onSubjectClick(subject) },
                     onLongPress = {
                         if (!isSubjectEditMode) onEnterSubjectEditMode()
+                        onToggleSubjectSelection(subject.id)
                     },
-                    isInEditMode = isSubjectEditMode
+                    isInEditMode = isSubjectEditMode,
+                    isSelected = selectedSubjectIds.contains(subject.id),
+                    onSelectToggle = { onToggleSubjectSelection(subject.id) }
                 )
             }
         }
@@ -628,6 +734,12 @@ fun HomeScreenContentPreview() {
             isSubjectEditMode = false,
             onEnterSubjectEditMode = {},
             onExitSubjectEditMode = {},
+            selectedSubjectIds = emptySet(),
+            onToggleSubjectSelection = {},
+            onSelectAllSubjectIds = {},
+            onClearSubjectSelection = {},
+            onHideSelected = {},
+            onDeleteSelected = {},
             onEdit = {},
             onDelete = {},
             onSubjectClick = {},

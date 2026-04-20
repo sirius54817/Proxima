@@ -11,6 +11,7 @@ import com.sirius.proxima.data.model.ExamReminder
 import com.sirius.proxima.data.repository.AcademicToolsRepository
 import com.sirius.proxima.di.ServiceLocator
 import com.sirius.proxima.notification.AlarmScheduler
+import com.sirius.proxima.ui.components.DeleteAnimationBus
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -119,6 +120,7 @@ class AcademicToolsViewModel(
         viewModelScope.launch {
             repository.deleteAssignment(item)
             AlarmScheduler.cancelAssignmentReminder(getApplication(), item.id)
+            DeleteAnimationBus.trigger()
         }
     }
 
@@ -126,6 +128,7 @@ class AcademicToolsViewModel(
         viewModelScope.launch {
             repository.deleteExam(item)
             AlarmScheduler.cancelExamReminder(getApplication(), item.id)
+            DeleteAnimationBus.trigger()
         }
     }
 

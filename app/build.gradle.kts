@@ -42,7 +42,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -88,6 +89,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.material.icons.extended)
 
@@ -123,6 +125,9 @@ dependencies {
     // OkHttp for SIS scraping
     implementation(libs.okhttp)
     implementation(libs.okhttp.urlconnection)
+
+    // Lottie animations
+    implementation(libs.lottie.compose)
 
     // Testing
     testImplementation(libs.junit)

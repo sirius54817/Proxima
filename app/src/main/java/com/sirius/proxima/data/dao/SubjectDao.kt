@@ -39,8 +39,14 @@ interface SubjectDao {
     @Query("UPDATE subjects SET isHidden = 1 WHERE id = :id")
     suspend fun hideSubject(id: Int)
 
+    @Query("UPDATE subjects SET isHidden = 1 WHERE id IN (:ids)")
+    suspend fun hideSubjects(ids: List<Int>)
+
     @Query("UPDATE subjects SET isHidden = 0 WHERE id = :id")
     suspend fun unhideSubject(id: Int)
+
+    @Query("DELETE FROM subjects WHERE id IN (:ids)")
+    suspend fun deleteSubjectsByIds(ids: List<Int>)
 
     @Query("DELETE FROM subjects")
     suspend fun deleteAllSubjects()

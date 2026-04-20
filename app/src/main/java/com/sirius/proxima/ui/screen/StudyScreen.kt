@@ -107,8 +107,8 @@ fun StudyScreen(
 
             item {
                 DashboardCard(
-                    title = "Study PDF",
-                    subtitle = "Store and open PDFs by subject",
+                    title = "Study Material",
+                    subtitle = "Store and open PDF, PPT, Word, TXT, and MD by subject",
                     onClick = onOpenStudyPdfs
                 )
             }

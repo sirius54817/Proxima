@@ -33,6 +33,9 @@ interface TimetableEntryDao {
     @Query("UPDATE timetable_entries SET subjectName = '[Deleted Subject]', subjectId = NULL WHERE subjectId = :subjectId")
     suspend fun markSubjectDeleted(subjectId: Int)
 
+    @Query("UPDATE timetable_entries SET subjectName = '[Deleted Subject]', subjectId = NULL WHERE subjectId IN (:subjectIds)")
+    suspend fun markSubjectsDeleted(subjectIds: List<Int>)
+
     @Query("DELETE FROM timetable_entries")
     suspend fun deleteAllEntries()
 }

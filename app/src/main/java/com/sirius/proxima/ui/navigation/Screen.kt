@@ -40,8 +40,8 @@ sealed class Screen(
     object NoteDetail : Screen("note_detail/{noteId}", "Note", Icons.Filled.School, Icons.Outlined.School) {
         fun createRoute(noteId: Int): String = "note_detail/$noteId"
     }
-    object StudyPdf : Screen("study_pdf", "Study PDF", Icons.Filled.School, Icons.Outlined.School)
-    object StudyPdfViewer : Screen("study_pdf_viewer/{pdfId}", "PDF", Icons.Filled.School, Icons.Outlined.School) {
+    object StudyPdf : Screen("study_pdf", "Study Material", Icons.Filled.School, Icons.Outlined.School)
+    object StudyPdfViewer : Screen("study_pdf_viewer/{pdfId}", "Material", Icons.Filled.School, Icons.Outlined.School) {
         fun createRoute(pdfId: Int): String = "study_pdf_viewer/$pdfId"
     }
 }

@@ -20,6 +20,7 @@ import com.sirius.proxima.data.sis.SisRepository
 import com.sirius.proxima.data.sis.SisResult
 import com.sirius.proxima.di.ServiceLocator
 import com.sirius.proxima.notification.AlarmScheduler
+import com.sirius.proxima.ui.components.DeleteAnimationBus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -182,6 +183,9 @@ class HomeViewModel(
     private val _historyPortalError = MutableStateFlow<String?>(null)
     val historyPortalError: StateFlow<String?> = _historyPortalError.asStateFlow()
 
+    private val _bulkSubjectActionStatus = MutableStateFlow<String?>(null)
+    val bulkSubjectActionStatus: StateFlow<String?> = _bulkSubjectActionStatus.asStateFlow()
+
     fun addSubject(name: String, totalClasses: Int, attendedClasses: Int) {
         viewModelScope.launch {
             subjectRepository.insertSubject(Subject(name = name, totalClasses = totalClasses, attendedClasses = attendedClasses))
@@ -199,7 +203,49 @@ class HomeViewModel(
         viewModelScope.launch {
             subjectRepository.deleteSubject(subject)
             rescheduleAlarms()
+            DeleteAnimationBus.trigger()
         }
+    }
+
+    fun hideSubjects(subjectIds: List<Int>) {
+        if (subjectIds.isEmpty()) {
+            _bulkSubjectActionStatus.value = "No subjects selected"
+            return
+        }
+        viewModelScope.launch {
+            subjectRepository.hideSubjects(subjectIds)
+            _bulkSubjectActionStatus.value = if (subjectIds.size == 1) {
+                "1 subject hidden"
+            } else {
+                "${subjectIds.size} subjects hidden"
+            }
+        }
+    }
+
+    fun deleteSubjects(subjectIds: List<Int>) {
+        if (subjectIds.isEmpty()) {
+            _bulkSubjectActionStatus.value = "No subjects selected"
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                subjectRepository.deleteSubjectsByIds(subjectIds)
+                rescheduleAlarms()
+                repeat(subjectIds.size.coerceIn(1, 6)) { DeleteAnimationBus.trigger() }
+            }.onSuccess {
+                _bulkSubjectActionStatus.value = if (subjectIds.size == 1) {
+                    "1 subject deleted"
+                } else {
+                    "${subjectIds.size} subjects deleted"
+                }
+            }.onFailure {
+                _bulkSubjectActionStatus.value = "Failed to delete selected subjects"
+            }
+        }
+    }
+
+    fun clearBulkSubjectActionStatus() {
+        _bulkSubjectActionStatus.value = null
     }
 
     fun hideSubject(subjectId: Int) {
@@ -338,6 +384,7 @@ class HomeViewModel(
     fun deleteCustomEvent(event: PlannerEvent) {
         viewModelScope.launch {
             studyRepository.deletePlannerEvent(event)
+            DeleteAnimationBus.trigger()
         }
     }
 

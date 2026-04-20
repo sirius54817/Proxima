@@ -28,6 +28,9 @@ interface StudyPdfDao {
     @Delete
     suspend fun delete(item: StudyPdf)
 
+    @Query("DELETE FROM study_pdfs WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Int>)
+
     @Query("DELETE FROM study_pdfs")
     suspend fun deleteAll()
 }

@@ -112,6 +112,19 @@ class StudyRepository(
         ).toInt()
     }
 
+    suspend fun deleteStudyPdf(pdf: StudyPdf) {
+        studyPdfDao.delete(pdf)
+    }
+
+    suspend fun deleteStudyPdfsByIds(ids: List<Int>) {
+        if (ids.isEmpty()) return
+        studyPdfDao.deleteByIds(ids)
+    }
+
+    suspend fun deleteAllStudyPdfs() {
+        studyPdfDao.deleteAll()
+    }
+
     suspend fun insertRawNote(note: SubjectNote): Int = subjectNoteDao.insert(note).toInt()
 
     suspend fun insertRawChecklistItems(items: List<NoteChecklistItem>) {
