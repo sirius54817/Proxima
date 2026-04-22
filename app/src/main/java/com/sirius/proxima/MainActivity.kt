@@ -33,7 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sirius.proxima.di.ServiceLocator
+import com.sirius.proxima.security.SecurityManager
 import com.sirius.proxima.ui.navigation.ProximaNavGraph
+import com.sirius.proxima.ui.screen.security.AppLockScreen
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.ui.theme.ThemeMode
 import com.sirius.proxima.worker.BackupScheduler
@@ -41,6 +43,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+
+    private val securityManager by lazy { SecurityManager(applicationContext) }
+    private var isLocked by mutableStateOf(false)
+    private var appLockEnabled by mutableStateOf(false)
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -54,6 +60,9 @@ class MainActivity : ComponentActivity() {
         BackupScheduler.scheduleDailyBackup(this)
         val settingsDataStore = ServiceLocator.getSettingsDataStore(applicationContext)
 
+        appLockEnabled = securityManager.isAppLockEnabled()
+        isLocked = appLockEnabled
+
         setContent {
             val appThemeMode = settingsDataStore.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM).value
             val useMaterial3 = settingsDataStore.useMaterial3.collectAsStateWithLifecycle(initialValue = false).value
@@ -65,12 +74,31 @@ class MainActivity : ComponentActivity() {
                 useMaterial3 = useMaterial3,
                 useMaterialYou = useMaterialYou
             ) {
-                if (showSplash) {
-                    ProximaSplash(onFinished = { showSplash = false })
-                } else {
-                    ProximaNavGraph()
+                when {
+                    appLockEnabled && isLocked -> {
+                        AppLockScreen(onUnlocked = { isLocked = false })
+                    }
+                    showSplash -> {
+                        ProximaSplash(onFinished = { showSplash = false })
+                    }
+                    else -> {
+                        ProximaNavGraph()
+                    }
                 }
             }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appLockEnabled = securityManager.isAppLockEnabled()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (securityManager.isAppLockEnabled()) {
+            appLockEnabled = true
+            isLocked = true
         }
     }
 

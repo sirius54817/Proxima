@@ -32,9 +32,11 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
+import com.sirius.proxima.ui.components.PinKeypad
 import com.sirius.proxima.ui.components.ConfirmDialog
 import com.sirius.proxima.ui.theme.ThemeMode
 import com.sirius.proxima.ui.theme.*
+import com.sirius.proxima.viewmodel.SecurityViewModel
 import com.sirius.proxima.viewmodel.SettingsViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -70,6 +72,11 @@ fun SettingsScreen(
     val useMaterial3 by viewModel.useMaterial3.collectAsStateWithLifecycle()
     val useMaterialYou by viewModel.useMaterialYou.collectAsStateWithLifecycle()
     val developerMode by viewModel.developerMode.collectAsStateWithLifecycle()
+    val securityViewModel: SecurityViewModel = viewModel(
+        factory = SecurityViewModel.factory(LocalContext.current.applicationContext as android.app.Application)
+    )
+    val hasPin by securityViewModel.hasPin.collectAsStateWithLifecycle()
+    val appLockEnabled by securityViewModel.appLockEnabled.collectAsStateWithLifecycle()
 
     LaunchedEffect(unlockMessage) {
         val message = unlockMessage ?: return@LaunchedEffect
@@ -81,6 +88,18 @@ fun SettingsScreen(
     var showClearCalendarDialog by remember { mutableStateOf(false) }
     var showClearPdfsDialog by remember { mutableStateOf(false) }
     var signInError by remember { mutableStateOf<String?>(null) }
+    var showPinSetupDialog by remember { mutableStateOf(false) }
+    var showChangePinDialog by remember { mutableStateOf(false) }
+    var pendingEnableAppLock by remember { mutableStateOf(false) }
+    var pinSetupError by remember { mutableStateOf<String?>(null) }
+    var pinClearSignal by remember { mutableIntStateOf(0) }
+    var pinShakeSignal by remember { mutableIntStateOf(0) }
+    var changeStep by remember { mutableIntStateOf(0) }
+    var currentPinInput by remember { mutableStateOf("") }
+    var newPinInput by remember { mutableStateOf("") }
+    var changePinError by remember { mutableStateOf<String?>(null) }
+    var changePinClearSignal by remember { mutableIntStateOf(0) }
+    var changePinShakeSignal by remember { mutableIntStateOf(0) }
     var hasCalendarPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
@@ -220,8 +239,157 @@ fun SettingsScreen(
         onSetAppThemeMode = viewModel::setAppThemeMode,
         onSetUseMaterial3 = viewModel::setUseMaterial3,
         onSetUseMaterialYou = viewModel::setUseMaterialYou,
-        onSetDeveloperMode = viewModel::setDeveloperMode
+        onSetDeveloperMode = viewModel::setDeveloperMode,
+        hasPin = hasPin,
+        appLockEnabled = appLockEnabled,
+        onSetAppLockEnabled = { enabled ->
+            if (!enabled) {
+                securityViewModel.setAppLockEnabled(false)
+            } else if (hasPin) {
+                securityViewModel.setAppLockEnabled(true)
+            } else {
+                pendingEnableAppLock = true
+                pinSetupError = null
+                showPinSetupDialog = true
+            }
+        },
+        onOpenChangePin = {
+            changeStep = 0
+            currentPinInput = ""
+            newPinInput = ""
+            changePinError = null
+            changePinClearSignal += 1
+            showChangePinDialog = true
+        }
     )
+
+    if (showPinSetupDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPinSetupDialog = false
+                pendingEnableAppLock = false
+            },
+            title = { Text("Set Security PIN") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Create a 6-digit PIN to enable security features.")
+                    pinSetupError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                    PinKeypad(
+                        onPinComplete = { pin ->
+                            if (pin.length != 6) {
+                                pinSetupError = "PIN must be 6 digits"
+                                pinShakeSignal += 1
+                                pinClearSignal += 1
+                                return@PinKeypad
+                            }
+                            securityViewModel.setupPin(pin)
+                            if (pendingEnableAppLock) securityViewModel.setAppLockEnabled(true)
+                            pendingEnableAppLock = false
+                            pinSetupError = null
+                            showPinSetupDialog = false
+                        },
+                        clearSignal = pinClearSignal,
+                        shakeSignal = pinShakeSignal
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = {
+                    showPinSetupDialog = false
+                    pendingEnableAppLock = false
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showChangePinDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showChangePinDialog = false
+                changeStep = 0
+                currentPinInput = ""
+                newPinInput = ""
+                changePinError = null
+            },
+            title = { Text("Change PIN") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        when (changeStep) {
+                            0 -> "Enter your current 6-digit PIN"
+                            1 -> "Enter your new 6-digit PIN"
+                            else -> "Confirm your new 6-digit PIN"
+                        }
+                    )
+                    changePinError?.let {
+                        Text(it, color = MaterialTheme.colorScheme.error)
+                    }
+                    PinKeypad(
+                        onPinComplete = { pin ->
+                            when (changeStep) {
+                                0 -> {
+                                    if (!securityViewModel.verifyPin(pin)) {
+                                        changePinError = "Incorrect current PIN"
+                                        changePinShakeSignal += 1
+                                        changePinClearSignal += 1
+                                    } else {
+                                        currentPinInput = pin
+                                        changePinError = null
+                                        changeStep = 1
+                                        changePinClearSignal += 1
+                                    }
+                                }
+
+                                1 -> {
+                                    newPinInput = pin
+                                    changePinError = null
+                                    changeStep = 2
+                                    changePinClearSignal += 1
+                                }
+
+                                else -> {
+                                    if (pin != newPinInput) {
+                                        changePinError = "New PINs do not match"
+                                        changePinShakeSignal += 1
+                                        changePinClearSignal += 1
+                                    } else {
+                                        val changed = securityViewModel.changePin(currentPinInput, newPinInput)
+                                        if (changed) {
+                                            Toast.makeText(context, "PIN updated", Toast.LENGTH_SHORT).show()
+                                            showChangePinDialog = false
+                                        } else {
+                                            changePinError = "Failed to update PIN"
+                                            changePinShakeSignal += 1
+                                            changePinClearSignal += 1
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        clearSignal = changePinClearSignal,
+                        shakeSignal = changePinShakeSignal
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = {
+                    showChangePinDialog = false
+                    changeStep = 0
+                    currentPinInput = ""
+                    newPinInput = ""
+                    changePinError = null
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     if (showClearDialog) {
         ConfirmDialog(
@@ -324,7 +492,11 @@ fun SettingsScreenContent(
     onSetAppThemeMode: (ThemeMode) -> Unit = {},
     onSetUseMaterial3: (Boolean) -> Unit = {},
     onSetUseMaterialYou: (Boolean) -> Unit = {},
-    onSetDeveloperMode: (Boolean) -> Unit = {}
+    onSetDeveloperMode: (Boolean) -> Unit = {},
+    hasPin: Boolean = false,
+    appLockEnabled: Boolean = false,
+    onSetAppLockEnabled: (Boolean) -> Unit = {},
+    onOpenChangePin: () -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
     var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Root) }
@@ -339,6 +511,7 @@ fun SettingsScreenContent(
         SettingsPage.Notifications,
         SettingsPage.Home,
         SettingsPage.Calendar,
+        SettingsPage.Security,
         SettingsPage.About,
         SettingsPage.Danger
     )
@@ -986,6 +1159,73 @@ fun SettingsScreenContent(
                     }
                 }
 
+                SettingsPage.Security -> {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Border),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "App Security",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("App Lock")
+                                        Text(
+                                            text = "Require PIN/biometric when reopening app",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MutedForeground
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Switch(
+                                        checked = appLockEnabled,
+                                        onCheckedChange = onSetAppLockEnabled
+                                    )
+                                }
+
+                                if (hasPin) {
+                                    OutlinedButton(
+                                        onClick = onOpenChangePin,
+                                        shape = RoundedCornerShape(8.dp),
+                                        border = BorderStroke(1.dp, Border),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LockReset,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Change PIN")
+                                    }
+                                }
+
+                                if (!hasPin) {
+                                    Text(
+                                        text = "Enable App Lock to create your PIN.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedForeground
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 SettingsPage.Danger -> {
                     item {
                         Card(
@@ -1107,6 +1347,7 @@ private enum class SettingsPage(val title: String, val description: String) {
     Notifications("Notifications", "Notification testing and behavior"),
     Home("Customize", "Appearance and home section settings"),
     Calendar("Google Calendar Sync", "Sync timetable to and from Google Calendar"),
+    Security("Security", "App lock and biometric unlock"),
     About("About", "Version and app information"),
     Danger("Danger Zone", "Destructive actions and data clearing")
 }
