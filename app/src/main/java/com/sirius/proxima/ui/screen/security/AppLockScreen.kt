@@ -3,8 +3,6 @@ package com.sirius.proxima.ui.screen.security
 import android.app.Application
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -29,12 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.ui.components.PinKeypad
+import com.sirius.proxima.ui.theme.ProximaTheme
+import com.sirius.proxima.util.BiometricUtils
 import com.sirius.proxima.viewmodel.SecurityViewModel
 
 @Composable
@@ -61,56 +61,33 @@ fun AppLockScreen(
     }
 
     fun triggerBiometric() {
-        val host = activity
-        val allowedAuthenticators = BiometricManager.Authenticators.BIOMETRIC_WEAK
-        if (host == null) {
+        if (activity == null) {
             error = "Biometric unavailable"
             showPin = true
             return
         }
 
-        val canAuth = BiometricManager.from(context)
-            .canAuthenticate(allowedAuthenticators)
-
-        if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
-            error = when (canAuth) {
-                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "No biometric enrolled on this phone"
-                BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "This phone has no biometric hardware"
-                BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "Biometric hardware is currently unavailable"
-                else -> "Biometric unavailable"
-            }
+        if (!BiometricUtils.isBiometricAvailable(context)) {
+            error = "Biometric not enrolled or unavailable"
             showPin = true
+            // Optionally prompt to enroll
+            // BiometricUtils.promptEnrollBiometric(context)
             return
         }
 
-        error = null
-        showPin = false
-
-        val prompt = BiometricPrompt(
-            host,
-            ContextCompat.getMainExecutor(context),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    onUnlocked()
-                }
-
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    error = errString.toString()
+        BiometricUtils.showBiometricPrompt(
+            activity = activity,
+            onSuccess = {
+                error = null
+                onUnlocked()
+            },
+            onFailure = { err ->
+                error = err
+                // If the user cancels or uses PIN, showPin will be handled by the UI
+                if (err?.contains("cancel", ignoreCase = true) == true) {
                     showPin = true
                 }
-
-                override fun onAuthenticationFailed() {
-                    error = "Biometric not recognized"
-                }
             }
-        )
-
-        prompt.authenticate(
-            BiometricPrompt.PromptInfo.Builder()
-                .setTitle("Unlock Proxima")
-                .setSubtitle("Confirm your identity")
-                .setAllowedAuthenticators(allowedAuthenticators)
-                .build()
         )
     }
 
@@ -128,6 +105,38 @@ fun AppLockScreen(
             it.contains("face", ignoreCase = true)
     }
 
+    AppLockContent(
+        showPin = showPin,
+        biometricEnabled = biometricEnabled,
+        visibleError = visibleError,
+        onTriggerBiometric = { triggerBiometric() },
+        onPinComplete = { pin ->
+            error = null
+            if (viewModel.verifyPin(pin)) {
+                onUnlocked()
+            } else {
+                error = "Incorrect PIN"
+                shakeSignal += 1
+                clearSignal += 1
+            }
+        },
+        clearSignal = clearSignal,
+        shakeSignal = shakeSignal,
+        onUsePinInstead = { showPin = true }
+    )
+}
+
+@Composable
+private fun AppLockContent(
+    showPin: Boolean,
+    biometricEnabled: Boolean,
+    visibleError: String?,
+    onTriggerBiometric: () -> Unit,
+    onPinComplete: (String) -> Unit,
+    clearSignal: Int,
+    shakeSignal: Int,
+    onUsePinInstead: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -153,16 +162,7 @@ fun AppLockScreen(
 
         if (showPin) {
             PinKeypad(
-                onPinComplete = { pin ->
-                    error = null
-                    if (viewModel.verifyPin(pin)) {
-                        onUnlocked()
-                    } else {
-                        error = "Incorrect PIN"
-                        shakeSignal += 1
-                        clearSignal += 1
-                    }
-                },
+                onPinComplete = onPinComplete,
                 clearSignal = clearSignal,
                 shakeSignal = shakeSignal
             )
@@ -175,16 +175,32 @@ fun AppLockScreen(
         }
 
         if (biometricEnabled && showPin) {
-            TextButton(onClick = { triggerBiometric() }) {
+            TextButton(onClick = onTriggerBiometric) {
                 Text("Use Biometric")
             }
         }
 
         if (biometricEnabled && !showPin) {
-            TextButton(onClick = { showPin = true }) {
+            TextButton(onClick = onUsePinInstead) {
                 Text("Use PIN instead")
             }
         }
     }
 }
 
+@Preview(showBackground = true, backgroundColor = 0xFF09090B)
+@Composable
+fun AppLockScreenPreview() {
+    ProximaTheme {
+        AppLockContent(
+            showPin = true,
+            biometricEnabled = true,
+            visibleError = "Incorrect PIN",
+            onTriggerBiometric = {},
+            onPinComplete = {},
+            clearSignal = 0,
+            shakeSignal = 0,
+            onUsePinInstead = {}
+        )
+    }
+}

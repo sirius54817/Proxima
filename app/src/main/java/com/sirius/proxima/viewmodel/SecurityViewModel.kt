@@ -26,6 +26,9 @@ class SecurityViewModel(application: Application) : AndroidViewModel(application
     private val _backupLockEnabled = MutableStateFlow(false)
     val backupLockEnabled: StateFlow<Boolean> = _backupLockEnabled.asStateFlow()
 
+    private val _appLockTimeoutMinutes = MutableStateFlow(0)
+    val appLockTimeoutMinutes: StateFlow<Int> = _appLockTimeoutMinutes.asStateFlow()
+
     init {
         refresh()
     }
@@ -35,6 +38,7 @@ class SecurityViewModel(application: Application) : AndroidViewModel(application
         _appLockEnabled.value = securityManager.isAppLockEnabled()
         _biometricEnabled.value = securityManager.isBiometricEnabled()
         _backupLockEnabled.value = securityManager.isBackupLockEnabled()
+        _appLockTimeoutMinutes.value = securityManager.getAppLockTimeoutMinutes()
     }
 
     fun verifyPin(pin: String): Boolean {
@@ -70,6 +74,11 @@ class SecurityViewModel(application: Application) : AndroidViewModel(application
 
     fun clearPin() {
         securityManager.clearPin()
+        refresh()
+    }
+
+    fun setAppLockTimeoutMinutes(minutes: Int) {
+        securityManager.setAppLockTimeoutMinutes(minutes)
         refresh()
     }
 

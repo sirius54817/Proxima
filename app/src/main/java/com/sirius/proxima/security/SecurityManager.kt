@@ -59,6 +59,8 @@ class SecurityManager(context: Context) {
         prefs.edit()
             .remove("pin_hash")
             .remove("pin_salt")
+            .remove("app_lock_timeout_minutes")
+            .remove("last_unlock_at")
             .putBoolean("app_lock_enabled", false)
             .putBoolean("backup_lock_enabled", false)
             .putBoolean("biometric_enabled", false)
@@ -87,6 +89,22 @@ class SecurityManager(context: Context) {
 
     fun setBackupLockEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("backup_lock_enabled", enabled).apply()
+    }
+
+    fun getAppLockTimeoutMinutes(): Int {
+        return prefs.getInt("app_lock_timeout_minutes", 0)
+    }
+
+    fun setAppLockTimeoutMinutes(minutes: Int) {
+        prefs.edit().putInt("app_lock_timeout_minutes", minutes).apply()
+    }
+
+    fun getLastUnlockAtMillis(): Long {
+        return prefs.getLong("last_unlock_at", 0L)
+    }
+
+    fun setLastUnlockAtMillis(timestampMillis: Long) {
+        prefs.edit().putLong("last_unlock_at", timestampMillis).apply()
     }
 }
 

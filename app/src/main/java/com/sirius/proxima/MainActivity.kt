@@ -4,8 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
@@ -42,7 +42,7 @@ import com.sirius.proxima.worker.BackupScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val securityManager by lazy { SecurityManager(applicationContext) }
     private var isLocked by mutableStateOf(false)
@@ -52,6 +52,25 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
+    private fun refreshLockStateForForeground() {
+        appLockEnabled = securityManager.isAppLockEnabled()
+        if (!appLockEnabled) {
+            isLocked = false
+            return
+        }
+
+        val timeoutMinutes = securityManager.getAppLockTimeoutMinutes()
+        if (timeoutMinutes <= 0) {
+            isLocked = true
+            return
+        }
+
+        val lastUnlockAt = securityManager.getLastUnlockAtMillis()
+        val timeoutMillis = timeoutMinutes * 60_000L
+        val elapsed = System.currentTimeMillis() - lastUnlockAt
+        isLocked = lastUnlockAt <= 0L || elapsed >= timeoutMillis
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -60,8 +79,7 @@ class MainActivity : ComponentActivity() {
         BackupScheduler.scheduleDailyBackup(this)
         val settingsDataStore = ServiceLocator.getSettingsDataStore(applicationContext)
 
-        appLockEnabled = securityManager.isAppLockEnabled()
-        isLocked = appLockEnabled
+        refreshLockStateForForeground()
 
         setContent {
             val appThemeMode = settingsDataStore.themeMode.collectAsStateWithLifecycle(initialValue = ThemeMode.SYSTEM).value
@@ -76,7 +94,10 @@ class MainActivity : ComponentActivity() {
             ) {
                 when {
                     appLockEnabled && isLocked -> {
-                        AppLockScreen(onUnlocked = { isLocked = false })
+                        AppLockScreen(onUnlocked = {
+                            securityManager.setLastUnlockAtMillis(System.currentTimeMillis())
+                            isLocked = false
+                        })
                     }
                     showSplash -> {
                         ProximaSplash(onFinished = { showSplash = false })
@@ -91,7 +112,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        appLockEnabled = securityManager.isAppLockEnabled()
+        refreshLockStateForForeground()
     }
 
     override fun onStop() {

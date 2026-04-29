@@ -40,7 +40,6 @@ import com.sirius.proxima.ui.theme.MutedForeground
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.StudyViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyScreen(
     onOpenNotes: () -> Unit,
@@ -54,6 +53,28 @@ fun StudyScreen(
     val weeklyStudiedMinutes by viewModel.weeklyStudiedMinutes.collectAsStateWithLifecycle()
     val streakDays by viewModel.studyStreakDays.collectAsStateWithLifecycle()
 
+    StudyScreenContent(
+        weeklyGoalMinutes = weeklyGoalMinutes,
+        weeklyStudiedMinutes = weeklyStudiedMinutes,
+        streakDays = streakDays,
+        onSaveWeeklyGoalHours = { viewModel.saveWeeklyGoalHours(it) },
+        onOpenNotes = onOpenNotes,
+        onOpenStudyPdfs = onOpenStudyPdfs,
+        onOpenFocusMode = onOpenFocusMode
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StudyScreenContent(
+    weeklyGoalMinutes: Int,
+    weeklyStudiedMinutes: Long,
+    streakDays: Int,
+    onSaveWeeklyGoalHours: (Int) -> Unit,
+    onOpenNotes: () -> Unit,
+    onOpenStudyPdfs: () -> Unit,
+    onOpenFocusMode: () -> Unit
+) {
     var showGoalDialog by remember { mutableStateOf(false) }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Study") }) }) { innerPadding ->
@@ -131,7 +152,7 @@ fun StudyScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    goalInput.toIntOrNull()?.let { viewModel.saveWeeklyGoalHours(it.coerceAtLeast(1)) }
+                    goalInput.toIntOrNull()?.let { onSaveWeeklyGoalHours(it.coerceAtLeast(1)) }
                     showGoalDialog = false
                 }) {
                     Text("Save")
@@ -175,6 +196,14 @@ private fun DashboardCard(title: String, subtitle: String, onClick: () -> Unit) 
 @Composable
 private fun StudyScreenPreview() {
     ProximaTheme {
-        StudyScreen(onOpenNotes = {}, onOpenStudyPdfs = {}, onOpenFocusMode = {})
+        StudyScreenContent(
+            weeklyGoalMinutes = 600,
+            weeklyStudiedMinutes = 240,
+            streakDays = 5,
+            onSaveWeeklyGoalHours = {},
+            onOpenNotes = {},
+            onOpenStudyPdfs = {},
+            onOpenFocusMode = {}
+        )
     }
 }

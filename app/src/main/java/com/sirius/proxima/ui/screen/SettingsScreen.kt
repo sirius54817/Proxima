@@ -36,6 +36,7 @@ import com.sirius.proxima.ui.components.PinKeypad
 import com.sirius.proxima.ui.components.ConfirmDialog
 import com.sirius.proxima.ui.theme.ThemeMode
 import com.sirius.proxima.ui.theme.*
+import com.sirius.proxima.util.BiometricUtils
 import com.sirius.proxima.viewmodel.SecurityViewModel
 import com.sirius.proxima.viewmodel.SettingsViewModel
 import java.text.SimpleDateFormat
@@ -77,6 +78,8 @@ fun SettingsScreen(
     )
     val hasPin by securityViewModel.hasPin.collectAsStateWithLifecycle()
     val appLockEnabled by securityViewModel.appLockEnabled.collectAsStateWithLifecycle()
+    val biometricEnabled by securityViewModel.biometricEnabled.collectAsStateWithLifecycle()
+    val appLockTimeoutMinutes by securityViewModel.appLockTimeoutMinutes.collectAsStateWithLifecycle()
 
     LaunchedEffect(unlockMessage) {
         val message = unlockMessage ?: return@LaunchedEffect
@@ -242,6 +245,8 @@ fun SettingsScreen(
         onSetDeveloperMode = viewModel::setDeveloperMode,
         hasPin = hasPin,
         appLockEnabled = appLockEnabled,
+        biometricEnabled = biometricEnabled,
+        appLockTimeoutMinutes = appLockTimeoutMinutes,
         onSetAppLockEnabled = { enabled ->
             if (!enabled) {
                 securityViewModel.setAppLockEnabled(false)
@@ -253,6 +258,18 @@ fun SettingsScreen(
                 showPinSetupDialog = true
             }
         },
+        onSetBiometricEnabled = { enabled ->
+            if (enabled) {
+                if (BiometricUtils.isBiometricAvailable(context)) {
+                    securityViewModel.setBiometricEnabled(true)
+                } else {
+                    BiometricUtils.promptEnrollBiometric(context)
+                    Toast.makeText(context, "Please enroll biometric in settings", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                securityViewModel.setBiometricEnabled(false)
+            }
+        },
         onOpenChangePin = {
             changeStep = 0
             currentPinInput = ""
@@ -260,6 +277,9 @@ fun SettingsScreen(
             changePinError = null
             changePinClearSignal += 1
             showChangePinDialog = true
+        },
+        onSetAppLockTimeoutMinutes = { minutes ->
+            securityViewModel.setAppLockTimeoutMinutes(minutes)
         }
     )
 
@@ -495,8 +515,12 @@ fun SettingsScreenContent(
     onSetDeveloperMode: (Boolean) -> Unit = {},
     hasPin: Boolean = false,
     appLockEnabled: Boolean = false,
+    biometricEnabled: Boolean = false,
+    appLockTimeoutMinutes: Int = 0,
     onSetAppLockEnabled: (Boolean) -> Unit = {},
-    onOpenChangePin: () -> Unit = {}
+    onSetBiometricEnabled: (Boolean) -> Unit = {},
+    onOpenChangePin: () -> Unit = {},
+    onSetAppLockTimeoutMinutes: (Int) -> Unit = {}
 ) {
     val clipboardManager = LocalClipboardManager.current
     var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Root) }
@@ -1161,6 +1185,11 @@ fun SettingsScreenContent(
 
                 SettingsPage.Security -> {
                     item {
+                        val timeoutOptions = listOf(0, 5, 10, 15, 30, 60)
+                        val timeoutLabel = if (appLockTimeoutMinutes == 0) "Every time"
+                        else "$appLockTimeoutMinutes min"
+                        var timeoutExpanded by remember { mutableStateOf(false) }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -1185,7 +1214,7 @@ fun SettingsScreenContent(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("App Lock")
                                         Text(
-                                            text = "Require PIN/biometric when reopening app",
+                                            text = "Require PIN when reopening app",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MutedForeground
                                         )
@@ -1194,6 +1223,35 @@ fun SettingsScreenContent(
                                     Switch(
                                         checked = appLockEnabled,
                                         onCheckedChange = onSetAppLockEnabled
+                                    )
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Biometric Unlock")
+                                        Text(
+                                            text = "Use fingerprint or face to unlock",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MutedForeground
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Switch(
+                                        checked = biometricEnabled,
+                                        onCheckedChange = onSetBiometricEnabled,
+                                        enabled = appLockEnabled
+                                    )
+                                }
+
+                                if (hasPin) {
+                                    Text(
+                                        text = "Current timeout: $timeoutLabel",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedForeground
                                     )
                                 }
 
@@ -1211,6 +1269,41 @@ fun SettingsScreenContent(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("Change PIN")
+                                    }
+
+                                    ExposedDropdownMenuBox(
+                                        expanded = timeoutExpanded,
+                                        onExpandedChange = { timeoutExpanded = !timeoutExpanded }
+                                    ) {
+                                        OutlinedTextField(
+                                            value = timeoutLabel,
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Ask for password") },
+                                            shape = RoundedCornerShape(14.dp),
+                                            trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(expanded = timeoutExpanded)
+                                            },
+                                            modifier = Modifier
+                                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                                .fillMaxWidth()
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = timeoutExpanded,
+                                            onDismissRequest = { timeoutExpanded = false },
+                                            shape = RoundedCornerShape(14.dp)
+                                        ) {
+                                            timeoutOptions.forEach { option ->
+                                                val optionLabel = if (option == 0) "Every time" else "$option min"
+                                                DropdownMenuItem(
+                                                    text = { Text(optionLabel) },
+                                                    onClick = {
+                                                        timeoutExpanded = false
+                                                        onSetAppLockTimeoutMinutes(option)
+                                                    }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
 
@@ -1347,7 +1440,7 @@ private enum class SettingsPage(val title: String, val description: String) {
     Notifications("Notifications", "Notification testing and behavior"),
     Home("Customize", "Appearance and home section settings"),
     Calendar("Google Calendar Sync", "Sync timetable to and from Google Calendar"),
-    Security("Security", "App lock and biometric unlock"),
+    Security("Security", "App lock and PIN settings"),
     About("About", "Version and app information"),
     Danger("Danger Zone", "Destructive actions and data clearing")
 }

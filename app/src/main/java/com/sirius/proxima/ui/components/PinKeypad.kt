@@ -14,10 +14,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,8 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.sirius.proxima.ui.theme.ProximaTheme
 
 @Composable
 fun PinKeypad(
@@ -194,10 +197,28 @@ private fun BackspaceKey(onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Backspace,
+            imageVector = Icons.AutoMirrored.Filled.Backspace,
             contentDescription = "Backspace",
             tint = Color.White
         )
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF09090B)
+@Composable
+fun PinKeypadPreview() {
+    ProximaTheme {
+        Box(
+            modifier = Modifier
+                .background(Color(0xFF09090B))
+                .padding(24.dp)
+        ) {
+            PinKeypad(
+                onPinComplete = {},
+                clearSignal = 0,
+                shakeSignal = 0
+            )
+        }
     }
 }
 
