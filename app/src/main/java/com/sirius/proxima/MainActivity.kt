@@ -119,7 +119,10 @@ class MainActivity : FragmentActivity() {
         super.onStop()
         if (securityManager.isAppLockEnabled()) {
             appLockEnabled = true
-            isLocked = true
+            // Only lock immediately if timeout is 0 ("Every time")
+            if (securityManager.getAppLockTimeoutMinutes() == 0) {
+                isLocked = true
+            }
         }
     }
 
