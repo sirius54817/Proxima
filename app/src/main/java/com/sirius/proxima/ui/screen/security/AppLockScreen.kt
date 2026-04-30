@@ -170,7 +170,7 @@ private fun AppLockContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Enter PIN to continue",
+            text = if (showPin) "Enter PIN to continue" else "Authenticating...",
             color = Color(0xFFA1A1AA),
             fontSize = 14.sp
         )

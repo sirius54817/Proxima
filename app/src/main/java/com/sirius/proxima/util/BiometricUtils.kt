@@ -12,9 +12,12 @@ import androidx.fragment.app.FragmentActivity
 
 object BiometricUtils {
 
+    private const val AUTHENTICATORS = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+
     fun isBiometricAvailable(context: Context): Boolean {
         val biometricManager = BiometricManager.from(context)
-        return when (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)) {
+        return when (biometricManager.canAuthenticate(AUTHENTICATORS)) {
             BiometricManager.BIOMETRIC_SUCCESS -> true
             BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> {
                 Log.d("BiometricAuth", "No biometric hardware available.")
@@ -37,7 +40,7 @@ object BiometricUtils {
             val enrollIntent = Intent(Settings.ACTION_BIOMETRIC_ENROLL).apply {
                 putExtra(
                     Settings.EXTRA_BIOMETRIC_AUTHENTICATORS_ALLOWED,
-                    BiometricManager.Authenticators.BIOMETRIC_STRONG
+                    AUTHENTICATORS
                 )
             }
             if (context is FragmentActivity) {
@@ -81,10 +84,10 @@ object BiometricUtils {
             })
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Biometric Authentication")
-            .setSubtitle("Confirm your identity to unlock Proxima")
+            .setTitle("Unlock Proxima")
             .setNegativeButtonText("Use PIN")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            .setAllowedAuthenticators(AUTHENTICATORS)
+            .setConfirmationRequired(false)
             .build()
 
         biometricPrompt.authenticate(promptInfo)
