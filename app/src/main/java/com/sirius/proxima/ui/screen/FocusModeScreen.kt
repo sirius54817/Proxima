@@ -40,13 +40,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.data.model.Subject
+import com.sirius.proxima.data.model.StudySession
 import com.sirius.proxima.ui.theme.Border
 import com.sirius.proxima.ui.theme.MutedForeground
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.StudyViewModel
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FocusModeScreen(
     onBack: () -> Unit,
@@ -58,6 +58,26 @@ fun FocusModeScreen(
     val sessions by viewModel.sessions.collectAsStateWithLifecycle()
     val subjectTotals by viewModel.subjectTotals.collectAsStateWithLifecycle()
 
+    FocusModeScreenContent(
+        subjects = subjects,
+        sessions = sessions,
+        subjectTotals = subjectTotals,
+        onBack = onBack,
+        onAddSession = { subjectId, startedAtMillis, durationSeconds ->
+            viewModel.addSession(subjectId, startedAtMillis, durationSeconds)
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FocusModeScreenContent(
+    subjects: List<Subject>,
+    sessions: List<StudySession>,
+    subjectTotals: List<Pair<Subject, Long>>,
+    onBack: () -> Unit,
+    onAddSession: (Int, Long, Long) -> Unit
+) {
     var selectedSubjectId by remember(subjects) { mutableStateOf(subjects.firstOrNull()?.id) }
     var runningStartMillis by remember { mutableLongStateOf(0L) }
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -99,10 +119,10 @@ fun FocusModeScreen(
                     onToggle = {
                         val activeSubject = selectedSubjectId ?: return@StudyTimerCard
                         if (runningStartMillis > 0L) {
-                            viewModel.addSession(
-                                subjectId = activeSubject,
-                                startedAtMillis = runningStartMillis,
-                                durationSeconds = ((System.currentTimeMillis() - runningStartMillis) / 1000).coerceAtLeast(1)
+                            onAddSession(
+                                activeSubject,
+                                runningStartMillis,
+                                ((System.currentTimeMillis() - runningStartMillis) / 1000).coerceAtLeast(1)
                             )
                             runningStartMillis = 0L
                         } else {
@@ -209,7 +229,21 @@ private fun formatDuration(totalSeconds: Long): String {
 @Composable
 private fun FocusModeScreenPreview() {
     ProximaTheme {
-        FocusModeScreen(onBack = {})
+        FocusModeScreenContent(
+            subjects = listOf(
+                Subject(1, "Mathematics", 40, 35),
+                Subject(2, "Physics", 30, 20)
+            ),
+            sessions = listOf(
+                StudySession(1, 1, System.currentTimeMillis() - 4000000, 3600, "2024-03-05"),
+                StudySession(2, 2, System.currentTimeMillis() - 2000000, 1800, "2024-03-06")
+            ),
+            subjectTotals = listOf(
+                Subject(1, "Mathematics", 40, 35) to 3600L,
+                Subject(2, "Physics", 30, 20) to 1800L
+            ),
+            onBack = {},
+            onAddSession = { _, _, _ -> }
+        )
     }
 }
-

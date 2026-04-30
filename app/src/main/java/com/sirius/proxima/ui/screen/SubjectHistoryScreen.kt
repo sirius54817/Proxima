@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.data.model.SubjectAttendanceRecord
+import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.ui.theme.AttendanceBlue
 import com.sirius.proxima.ui.theme.AttendanceGreen
 import com.sirius.proxima.ui.theme.AttendanceRed
@@ -69,7 +70,6 @@ import java.util.Locale
 
 private enum class HistoryViewMode { CALENDAR, LIST }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubjectHistoryScreen(
     subjectId: Int,
@@ -85,7 +85,38 @@ fun SubjectHistoryScreen(
     val sisUnlocked by viewModel.sisFeaturesUnlocked.collectAsStateWithLifecycle()
 
     val subject = subjects.find { it.id == subjectId }
-    var visibleCount by remember(subjectId) { mutableStateOf(15) }
+
+    SubjectHistoryScreenContent(
+        subject = subject,
+        history = history,
+        loadingSubjectId = loadingSubjectId,
+        portalError = portalError,
+        sisUnlocked = sisUnlocked,
+        onBack = onBack,
+        onClearPortalError = { viewModel.clearHistoryPortalError() },
+        onLoadFromPortal = { if (subject != null) viewModel.loadMoreHistoryFromPortal(subject) },
+        onAddManualRecord = { status, date, slot ->
+            if (subject != null) {
+                viewModel.addManualAttendanceRecord(subject.id, status, date, slot)
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SubjectHistoryScreenContent(
+    subject: Subject?,
+    history: List<SubjectAttendanceRecord>,
+    loadingSubjectId: Int?,
+    portalError: String?,
+    sisUnlocked: Boolean,
+    onBack: () -> Unit,
+    onClearPortalError: () -> Unit,
+    onLoadFromPortal: () -> Unit,
+    onAddManualRecord: (String, String, String?) -> Unit
+) {
+    var visibleCount by remember(subject?.id) { mutableStateOf(15) }
     var showManualAddDialog by remember { mutableStateOf(false) }
     var viewMode by remember { mutableStateOf(HistoryViewMode.CALENDAR) }
     var currentMonth by remember { mutableStateOf(YearMonth.now()) }
@@ -131,8 +162,7 @@ fun SubjectHistoryScreen(
         ) {
             Spacer(modifier = Modifier.height(12.dp))
 
-            val errorMessage = portalError
-            if (sisUnlocked && errorMessage != null) {
+            if (sisUnlocked && portalError != null) {
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = AttendanceRed.copy(alpha = 0.08f)
@@ -141,11 +171,11 @@ fun SubjectHistoryScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = errorMessage,
+                            text = portalError,
                             style = MaterialTheme.typography.bodySmall,
                             color = AttendanceRed
                         )
-                        TextButton(onClick = { viewModel.clearHistoryPortalError() }) {
+                        TextButton(onClick = onClearPortalError) {
                             Text("Dismiss")
                         }
                     }
@@ -169,11 +199,11 @@ fun SubjectHistoryScreen(
 
                 if (sisUnlocked) {
                     Button(
-                        onClick = { if (subject != null) viewModel.loadMoreHistoryFromPortal(subject) },
-                        enabled = loadingSubjectId != subjectId && subject != null,
+                        onClick = onLoadFromPortal,
+                        enabled = loadingSubjectId != subject?.id && subject != null,
                         modifier = Modifier.weight(1f)
                     ) {
-                        if (loadingSubjectId == subjectId) {
+                        if (loadingSubjectId == subject?.id && subject != null) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
@@ -181,7 +211,7 @@ fun SubjectHistoryScreen(
                             )
                             Spacer(modifier = Modifier.size(8.dp))
                         }
-                        Text(if (loadingSubjectId == subjectId) "Loading..." else "Load from Portal")
+                        Text(if (loadingSubjectId == subject?.id && subject != null) "Loading..." else "Load from Portal")
                     }
                 }
             }
@@ -287,13 +317,8 @@ fun SubjectHistoryScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (subject != null && dateText.isNotBlank()) {
-                            viewModel.addManualAttendanceRecord(
-                                subjectId = subject.id,
-                                status = selectedStatus,
-                                date = dateText.trim(),
-                                slotName = slotText.trim().ifBlank { null }
-                            )
+                        if (dateText.isNotBlank()) {
+                            onAddManualRecord(selectedStatus, dateText.trim(), slotText.trim().ifBlank { null })
                             showManualAddDialog = false
                         }
                     }
@@ -432,8 +457,19 @@ private fun LegendDot(label: String, color: androidx.compose.ui.graphics.Color) 
 @Composable
 private fun SubjectHistoryScreenPreview() {
     ProximaTheme {
-        SubjectHistoryScreen(subjectId = 1, onBack = {})
+        SubjectHistoryScreenContent(
+            subject = Subject(1, "Mathematics", 40, 32),
+            history = listOf(
+                SubjectAttendanceRecord(1, 1, AttendanceStatus.PRESENT, "2024-03-01", null, System.currentTimeMillis()),
+                SubjectAttendanceRecord(2, 1, AttendanceStatus.ABSENT, "2024-03-02", "Slot 1", System.currentTimeMillis())
+            ),
+            loadingSubjectId = null,
+            portalError = null,
+            sisUnlocked = true,
+            onBack = {},
+            onClearPortalError = {},
+            onLoadFromPortal = {},
+            onAddManualRecord = { _, _, _ -> }
+        )
     }
 }
-
-

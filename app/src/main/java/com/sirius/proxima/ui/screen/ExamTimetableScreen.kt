@@ -36,13 +36,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.ExamReminder
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.AcademicToolsViewModel
 import com.sirius.proxima.viewmodel.millisToLocalDateTimeText
 import java.time.Duration
 import java.time.LocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExamTimetableScreen(
     onBack: () -> Unit,
@@ -51,6 +51,23 @@ fun ExamTimetableScreen(
     )
 ) {
     val exams by viewModel.exams.collectAsStateWithLifecycle()
+
+    ExamTimetableScreenContent(
+        exams = exams,
+        onBack = onBack,
+        onAddExam = { subject, dateTime -> viewModel.addExam(subject, dateTime) },
+        onDeleteExam = { viewModel.deleteExam(it) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExamTimetableScreenContent(
+    exams: List<ExamReminder>,
+    onBack: () -> Unit,
+    onAddExam: (String, String) -> Unit,
+    onDeleteExam: (ExamReminder) -> Unit
+) {
     var subject by remember { mutableStateOf("") }
     var dateTime by remember { mutableStateOf("") }
     var now by remember { mutableStateOf(LocalDateTime.now()) }
@@ -104,7 +121,7 @@ fun ExamTimetableScreen(
                 Button(
                     onClick = {
                         if (subject.isNotBlank() && dateTime.isNotBlank()) {
-                            viewModel.addExam(subject.trim(), dateTime.trim())
+                            onAddExam(subject.trim(), dateTime.trim())
                             subject = ""
                             dateTime = ""
                         }
@@ -126,7 +143,7 @@ fun ExamTimetableScreen(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text("$examText (${countdown(examText, now)})")
                     }
-                    TextButton(onClick = { viewModel.deleteExam(item) }) {
+                    TextButton(onClick = { onDeleteExam(item) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Delete")
@@ -141,7 +158,15 @@ fun ExamTimetableScreen(
 @Composable
 private fun ExamTimetableScreenPreview() {
     ProximaTheme {
-        ExamTimetableScreen(onBack = {})
+        ExamTimetableScreenContent(
+            exams = listOf(
+                ExamReminder(1, "Data Structures", System.currentTimeMillis() + 86400000 * 3, 0L),
+                ExamReminder(2, "Operating Systems", System.currentTimeMillis() + 86400000 * 7, 0L)
+            ),
+            onBack = {},
+            onAddExam = { _, _ -> },
+            onDeleteExam = {}
+        )
     }
 }
 
@@ -158,4 +183,3 @@ private fun countdown(dateTime: String, now: LocalDateTime): String {
         }
     }
 }
-

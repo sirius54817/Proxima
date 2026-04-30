@@ -25,8 +25,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +41,6 @@ import com.sirius.proxima.viewmodel.AcademicToolsViewModel
 
 private data class GpaRow(var gradePoint: String = "", var credits: String = "")
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GpaToolScreen(
     onBack: () -> Unit,
@@ -47,8 +48,27 @@ fun GpaToolScreen(
         factory = AcademicToolsViewModel.factory(LocalContext.current.applicationContext as android.app.Application)
     )
 ) {
-    val previousCgpa = viewModel.previousCgpa.collectAsStateWithLifecycle().value
-    val previousCredits = viewModel.previousCredits.collectAsStateWithLifecycle().value
+    val previousCgpa by viewModel.previousCgpa.collectAsStateWithLifecycle()
+    val previousCredits by viewModel.previousCredits.collectAsStateWithLifecycle()
+
+    GpaToolScreenContent(
+        previousCgpa = previousCgpa,
+        previousCredits = previousCredits,
+        onBack = onBack,
+        onSetPreviousCgpa = { viewModel.setPreviousCgpa(it) },
+        onSetPreviousCredits = { viewModel.setPreviousCredits(it) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GpaToolScreenContent(
+    previousCgpa: String,
+    previousCredits: String,
+    onBack: () -> Unit,
+    onSetPreviousCgpa: (String) -> Unit,
+    onSetPreviousCredits: (String) -> Unit
+) {
     val rows = remember { mutableStateListOf(GpaRow()) }
     if (rows.isEmpty()) rows.add(GpaRow())
 
@@ -105,7 +125,7 @@ fun GpaToolScreen(
             item {
                 OutlinedTextField(
                     value = previousCgpa,
-                    onValueChange = { viewModel.setPreviousCgpa(it) },
+                    onValueChange = onSetPreviousCgpa,
                     label = { Text("Previous CGPA") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -115,7 +135,7 @@ fun GpaToolScreen(
             item {
                 OutlinedTextField(
                     value = previousCredits,
-                    onValueChange = { viewModel.setPreviousCredits(it) },
+                    onValueChange = onSetPreviousCredits,
                     label = { Text("Previous Credits") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
@@ -136,7 +156,13 @@ fun GpaToolScreen(
 @Composable
 private fun GpaToolScreenPreview() {
     ProximaTheme {
-        GpaToolScreen(onBack = {})
+        GpaToolScreenContent(
+            previousCgpa = "8.5",
+            previousCredits = "60",
+            onBack = {},
+            onSetPreviousCgpa = {},
+            onSetPreviousCredits = {}
+        )
     }
 }
 
@@ -159,4 +185,3 @@ private fun calculateCgpa(gpa: Double, rows: List<GpaRow>, prevCgpa: String, pre
     val totalCredits = currentCredits + previousCredits
     return if (totalCredits > 0) ((gpa * currentCredits) + (previousCgpa * previousCredits)) / totalCredits else gpa
 }
-

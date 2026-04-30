@@ -40,13 +40,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.SubjectNote
 import com.sirius.proxima.data.model.NoteWithChecklist
+import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.ui.theme.Border
 import com.sirius.proxima.ui.theme.MutedForeground
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.StudyViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesListScreen(
     onBack: () -> Unit,
@@ -60,6 +61,28 @@ fun NotesListScreen(
     val notes by viewModel.notes.collectAsStateWithLifecycle()
     val query by viewModel.noteSearchQuery.collectAsStateWithLifecycle()
 
+    NotesListScreenContent(
+        subjects = subjects,
+        notes = notes,
+        query = query,
+        onBack = onBack,
+        onOpenNote = onOpenNote,
+        onCreateNote = onCreateNote,
+        onSearchQueryChange = viewModel::setNoteSearch
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotesListScreenContent(
+    subjects: List<Subject>,
+    notes: List<NoteWithChecklist>,
+    query: String,
+    onBack: () -> Unit,
+    onOpenNote: (Int) -> Unit,
+    onCreateNote: () -> Unit,
+    onSearchQueryChange: (String) -> Unit
+) {
     val orderedNotes = notes.sortedBy { it.note.title.lowercase() }
     var selectedMatchIndex by remember(orderedNotes.size) { mutableIntStateOf(if (orderedNotes.isNotEmpty()) 0 else -1) }
     val selectedNoteId = orderedNotes.getOrNull(selectedMatchIndex)?.note?.id
@@ -92,7 +115,7 @@ fun NotesListScreen(
             item {
                 OutlinedTextField(
                     value = query,
-                    onValueChange = viewModel::setNoteSearch,
+                    onValueChange = onSearchQueryChange,
                     label = { Text("Search words") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -196,7 +219,28 @@ private fun NoteRow(
 @Composable
 private fun NotesListScreenPreview() {
     ProximaTheme {
-        NotesListScreen(onBack = {}, onOpenNote = {}, onCreateNote = {})
+        NotesListScreenContent(
+            subjects = listOf(Subject(1, "Mathematics", 40, 35)),
+            notes = listOf(
+                NoteWithChecklist(
+                    note = SubjectNote(
+                        id = 1,
+                        subjectId = 1,
+                        title = "Calculus Notes",
+                        content = "Integration by parts...",
+                        isChecklist = false,
+                        isPinned = false,
+                        createdAtMillis = System.currentTimeMillis(),
+                        updatedAtMillis = System.currentTimeMillis()
+                    ),
+                    checklistItems = emptyList()
+                )
+            ),
+            query = "",
+            onBack = {},
+            onOpenNote = {},
+            onCreateNote = {},
+            onSearchQueryChange = {}
+        )
     }
 }
-

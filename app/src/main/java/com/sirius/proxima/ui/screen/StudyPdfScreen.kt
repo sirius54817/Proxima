@@ -54,6 +54,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.data.model.StudyPdf
+import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.ui.components.ConfirmDialog
 import com.sirius.proxima.ui.theme.Border
 import com.sirius.proxima.ui.theme.MutedForeground
@@ -64,7 +65,6 @@ import com.sirius.proxima.ui.theme.StudyMaterialPptOrange
 import com.sirius.proxima.viewmodel.StudyViewModel
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyPdfScreen(
     onBack: () -> Unit,
@@ -72,13 +72,40 @@ fun StudyPdfScreen(
         factory = StudyViewModel.factory(LocalContext.current.applicationContext as android.app.Application)
     )
 ) {
-    val context = LocalContext.current
     val subjects by viewModel.subjects.collectAsStateWithLifecycle()
     val pdfs by viewModel.studyPdfs.collectAsStateWithLifecycle()
     val importStatus by viewModel.pdfImportStatus.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.pdfDeleteInProgress.collectAsStateWithLifecycle()
     val deleteProgress by viewModel.pdfDeleteProgress.collectAsStateWithLifecycle()
     val deleteProgressText by viewModel.pdfDeleteProgressText.collectAsStateWithLifecycle()
+
+    StudyPdfScreenContent(
+        subjects = subjects,
+        pdfs = pdfs,
+        importStatus = importStatus,
+        deleteInProgress = deleteInProgress,
+        deleteProgress = deleteProgress,
+        deleteProgressText = deleteProgressText,
+        onBack = onBack,
+        onImportPdfs = { subjectId, uris -> viewModel.importStudyPdfs(subjectId, uris) },
+        onDeletePdfs = { viewModel.deleteStudyPdfs(it) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StudyPdfScreenContent(
+    subjects: List<Subject>,
+    pdfs: List<StudyPdf>,
+    importStatus: String?,
+    deleteInProgress: Boolean,
+    deleteProgress: Float,
+    deleteProgressText: String,
+    onBack: () -> Unit,
+    onImportPdfs: (Int, List<Uri>) -> Unit,
+    onDeletePdfs: (List<StudyPdf>) -> Unit
+) {
+    val context = LocalContext.current
     var selectedSubjectId by remember(subjects) { mutableStateOf(subjects.firstOrNull()?.id) }
     var selectedPdfIds by remember { mutableStateOf(setOf<Int>()) }
     var showDeleteSelectedDialog by remember { mutableStateOf(false) }
@@ -94,7 +121,7 @@ fun StudyPdfScreen(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
         val subjectId = selectedSubjectId ?: return@rememberLauncherForActivityResult
         if (uris.isNotEmpty()) {
-            viewModel.importStudyPdfs(subjectId, uris)
+            onImportPdfs(subjectId, uris)
         }
     }
 
@@ -298,7 +325,7 @@ fun StudyPdfScreen(
             isDangerous = true,
             onConfirm = {
                 if (selected.isNotEmpty()) {
-                    viewModel.deleteStudyPdfs(selected)
+                    onDeletePdfs(selected)
                 }
                 selectedPdfIds = emptySet()
                 showDeleteSelectedDialog = false
@@ -388,12 +415,22 @@ private fun resolveMimeTypeForPath(path: String): String {
     }
 }
 
-
-
 @Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
 @Composable
 private fun StudyPdfScreenPreview() {
     ProximaTheme {
-        StudyPdfScreen(onBack = {})
+        StudyPdfScreenContent(
+            subjects = listOf(Subject(1, "Mathematics", 40, 35)),
+            pdfs = listOf(
+                StudyPdf(1, 1, "Lecture 1", "/path/to/lecture1.pdf")
+            ),
+            importStatus = null,
+            deleteInProgress = false,
+            deleteProgress = 0f,
+            deleteProgressText = "",
+            onBack = {},
+            onImportPdfs = { _, _ -> },
+            onDeletePdfs = {}
+        )
     }
 }

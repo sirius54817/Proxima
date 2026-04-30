@@ -622,6 +622,14 @@ private fun AttendanceStat(label: String, value: String, color: androidx.compose
 
 @Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
 @Composable
+private fun SisLoginScreenPreview() {
+    ProximaTheme {
+        SisLoginScreen(initialRegisterNo = "9921004000", onLogin = { _, _ -> })
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF0A0A0A)
+@Composable
 private fun SisAttendanceScreenPreview() {
     ProximaTheme {
         SisAttendanceScreen(

@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.AssignmentReminder
 import com.sirius.proxima.ui.theme.Border
 import com.sirius.proxima.ui.theme.Muted
 import com.sirius.proxima.ui.theme.MutedForeground
@@ -74,7 +75,6 @@ import java.util.Locale
 
 private data class SyncedHoliday(val date: String, val title: String)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssignmentTrackerScreen(
     onBack: () -> Unit,
@@ -84,11 +84,7 @@ fun AssignmentTrackerScreen(
 ) {
     val context = LocalContext.current
     val assignments by viewModel.assignments.collectAsStateWithLifecycle()
-    var showAddDialog by remember { mutableStateOf(false) }
-    var title by remember { mutableStateOf("") }
-    var dueDate by remember { mutableStateOf("") }
     var syncMessage by remember { mutableStateOf("") }
-    var month by remember { mutableStateOf(YearMonth.now()) }
 
     var hasCalendarPermission by remember {
         mutableStateOf(
@@ -103,6 +99,56 @@ fun AssignmentTrackerScreen(
         syncMessage = if (granted) "Calendar permission granted. Tap Sync Holidays again."
         else "Calendar permission is needed to sync holidays."
     }
+
+    AssignmentTrackerScreenContent(
+        assignments = assignments,
+        syncMessage = syncMessage,
+        onBack = onBack,
+        onAddAssignment = { title, date -> viewModel.addAssignment(title, date) },
+        onDeleteAssignment = { viewModel.deleteAssignment(it) },
+        onSyncHolidays = {
+            if (!hasCalendarPermission) {
+                permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+            } else {
+                val synced = loadGoogleHolidays(context)
+                if (synced.isEmpty()) {
+                    syncMessage = "No Google holidays found to sync."
+                } else {
+                    val existing = assignments
+                        .map { "${millisToLocalDateText(it.dueAtMillis)}|${it.title}" }
+                        .toMutableSet()
+
+                    var added = 0
+                    synced.forEach { holiday ->
+                        val normalizedTitle = holidayAssignmentTitle(holiday.title)
+                        val key = "${holiday.date}|$normalizedTitle"
+                        if (key !in existing) {
+                            viewModel.addAssignment(normalizedTitle, holiday.date)
+                            existing += key
+                            added++
+                        }
+                    }
+                    syncMessage = "Synced ${synced.size} holidays, added $added new."
+                }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AssignmentTrackerScreenContent(
+    assignments: List<AssignmentReminder>,
+    syncMessage: String,
+    onBack: () -> Unit,
+    onAddAssignment: (String, String) -> Unit,
+    onDeleteAssignment: (AssignmentReminder) -> Unit,
+    onSyncHolidays: () -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var title by remember { mutableStateOf("") }
+    var dueDate by remember { mutableStateOf("") }
+    var month by remember { mutableStateOf(YearMonth.now()) }
 
     val markedDates = assignments.mapNotNull {
         runCatching { LocalDate.parse(millisToLocalDateText(it.dueAtMillis)) }.getOrNull()
@@ -163,34 +209,7 @@ fun AssignmentTrackerScreen(
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = {
-                            if (!hasCalendarPermission) {
-                                permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                                return@Button
-                            }
-
-                            val synced = loadGoogleHolidays(context)
-                            if (synced.isEmpty()) {
-                                syncMessage = "No Google holidays found to sync."
-                                return@Button
-                            }
-
-                            val existing = assignments
-                                .map { "${millisToLocalDateText(it.dueAtMillis)}|${it.title}" }
-                                .toMutableSet()
-
-                            var added = 0
-                            synced.forEach { holiday ->
-                                val normalizedTitle = holidayAssignmentTitle(holiday.title)
-                                val key = "${holiday.date}|$normalizedTitle"
-                                if (key !in existing) {
-                                    viewModel.addAssignment(normalizedTitle, holiday.date)
-                                    existing += key
-                                    added++
-                                }
-                            }
-                            syncMessage = "Synced ${synced.size} holidays, added $added new."
-                        },
+                        onClick = onSyncHolidays,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Sync Holidays")
@@ -226,7 +245,7 @@ fun AssignmentTrackerScreen(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text("$dueText (${daysLeft(dueText)})")
                     }
-                    TextButton(onClick = { viewModel.deleteAssignment(item) }) {
+                    TextButton(onClick = { onDeleteAssignment(item) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Delete")
@@ -259,7 +278,7 @@ fun AssignmentTrackerScreen(
             confirmButton = {
                 TextButton(onClick = {
                     if (title.isNotBlank() && dueDate.isNotBlank()) {
-                        viewModel.addAssignment(title.trim(), dueDate.trim())
+                        onAddAssignment(title.trim(), dueDate.trim())
                         title = ""
                         dueDate = ""
                         showAddDialog = false
@@ -336,7 +355,17 @@ private fun CompactMonthCalendar(month: YearMonth, markedDates: Set<LocalDate>) 
 @Composable
 private fun AssignmentTrackerScreenPreview() {
     ProximaTheme {
-        AssignmentTrackerScreen(onBack = {})
+        AssignmentTrackerScreenContent(
+            assignments = listOf(
+                AssignmentReminder(1, "Mathematics Assignment", System.currentTimeMillis() + 86400000 * 2, 0L),
+                AssignmentReminder(2, "Physics Lab Report", System.currentTimeMillis() + 86400000 * 5, 0L)
+            ),
+            syncMessage = "Ready to sync",
+            onBack = {},
+            onAddAssignment = { _, _ -> },
+            onDeleteAssignment = {},
+            onSyncHolidays = {}
+        )
     }
 }
 
@@ -413,4 +442,3 @@ private fun loadGoogleHolidays(context: Context): List<SyncedHoliday> {
 
     return holidays
 }
-

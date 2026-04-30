@@ -34,11 +34,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.StudyPdf
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.StudyViewModel
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StudyPdfViewerScreen(
     pdfId: Int,
@@ -48,6 +48,19 @@ fun StudyPdfViewerScreen(
     )
 ) {
     val pdf by viewModel.getStudyPdfById(pdfId).collectAsStateWithLifecycle(initialValue = null)
+
+    StudyPdfViewerScreenContent(
+        pdf = pdf,
+        onBack = onBack
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StudyPdfViewerScreenContent(
+    pdf: StudyPdf?,
+    onBack: () -> Unit
+) {
     var pageIndex by remember { mutableIntStateOf(0) }
     var pageCount by remember { mutableIntStateOf(0) }
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -111,7 +124,9 @@ fun StudyPdfViewerScreen(
 @Composable
 private fun StudyPdfViewerScreenPreview() {
     ProximaTheme {
-        StudyPdfViewerScreen(pdfId = 0, onBack = {})
+        StudyPdfViewerScreenContent(
+            pdf = StudyPdf(1, 1, "Lecture 1", "/path/to/lecture1.pdf"),
+            onBack = {}
+        )
     }
 }
-

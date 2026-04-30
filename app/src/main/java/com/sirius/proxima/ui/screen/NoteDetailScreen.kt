@@ -53,12 +53,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.sirius.proxima.data.model.NoteWithChecklist
+import com.sirius.proxima.data.model.Subject
 import com.sirius.proxima.ui.theme.MutedForeground
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.StudyViewModel
 import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteDetailScreen(
     noteId: Int,
@@ -67,10 +68,34 @@ fun NoteDetailScreen(
         factory = StudyViewModel.factory(LocalContext.current.applicationContext as android.app.Application)
     )
 ) {
-    val context = LocalContext.current
     val subjects by viewModel.subjects.collectAsStateWithLifecycle()
     val note by viewModel.getNoteById(noteId).collectAsStateWithLifecycle(initialValue = null)
 
+    NoteDetailScreenContent(
+        noteId = noteId,
+        subjects = subjects,
+        note = note,
+        onBack = onBack,
+        onUpsertNote = { activeNoteId, subjectId, title, content, isChecklist, checklistItems ->
+            viewModel.upsertNoteAndGetId(activeNoteId, subjectId, title, content, isChecklist, checklistItems)
+        },
+        onSaveNote = { activeNoteId, subjectId, title, content, isChecklist, checklistItems ->
+            viewModel.addOrUpdateNote(activeNoteId, subjectId, title, content, isChecklist, checklistItems)
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NoteDetailScreenContent(
+    noteId: Int,
+    subjects: List<Subject>,
+    note: NoteWithChecklist?,
+    onBack: () -> Unit,
+    onUpsertNote: suspend (Int?, Int, String, String, Boolean, List<String>) -> Int,
+    onSaveNote: (Int?, Int, String, String, Boolean, List<String>) -> Unit
+) {
+    val context = LocalContext.current
     var subjectId by remember { mutableStateOf<Int?>(null) }
     var activeNoteId by remember { mutableStateOf(noteId.takeIf { it != 0 }) }
     var title by remember { mutableStateOf("") }
@@ -121,13 +146,13 @@ fun NoteDetailScreen(
         val resolvedSubjectId = subjectId ?: return@LaunchedEffect
         if (title.isBlank()) return@LaunchedEffect
         delay(1200)
-        activeNoteId = viewModel.upsertNoteAndGetId(
-            noteId = activeNoteId,
-            subjectId = resolvedSubjectId,
-            title = title,
-            content = if (isChecklist) "" else bodyField.text,
-            isChecklist = isChecklist,
-            checklistItems = if (isChecklist) bodyField.text.lines().filter { it.isNotBlank() } else emptyList()
+        activeNoteId = onUpsertNote(
+            activeNoteId,
+            resolvedSubjectId,
+            title,
+            if (isChecklist) "" else bodyField.text,
+            isChecklist,
+            if (isChecklist) bodyField.text.lines().filter { it.isNotBlank() } else emptyList()
         )
     }
 
@@ -144,13 +169,13 @@ fun NoteDetailScreen(
                     TextButton(
                         onClick = {
                             val resolvedSubjectId = subjectId ?: return@TextButton
-                            viewModel.addOrUpdateNote(
-                                noteId = activeNoteId,
-                                subjectId = resolvedSubjectId,
-                                title = title,
-                                content = if (isChecklist) "" else bodyField.text,
-                                isChecklist = isChecklist,
-                                checklistItems = if (isChecklist) bodyField.text.lines().filter { it.isNotBlank() } else emptyList()
+                            onSaveNote(
+                                activeNoteId,
+                                resolvedSubjectId,
+                                title,
+                                if (isChecklist) "" else bodyField.text,
+                                isChecklist,
+                                if (isChecklist) bodyField.text.lines().filter { it.isNotBlank() } else emptyList()
                             )
                             onBack()
                         },
@@ -390,7 +415,13 @@ private fun readTextFromUri(context: Context, uri: Uri): String? {
 @Composable
 private fun NoteDetailScreenPreview() {
     ProximaTheme {
-        NoteDetailScreen(noteId = 0, onBack = {})
+        NoteDetailScreenContent(
+            noteId = 0,
+            subjects = listOf(Subject(1, "Mathematics", 40, 35)),
+            note = null,
+            onBack = {},
+            onUpsertNote = { _, _, _, _, _, _ -> 1 },
+            onSaveNote = { _, _, _, _, _, _ -> }
+        )
     }
 }
-

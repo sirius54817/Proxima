@@ -66,19 +66,12 @@ import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
-private data class AcademicDay(val date: String, val type: String, val note: String)
+data class AcademicDay(val date: String, val type: String, val note: String)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HolidayCalendarScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var days by remember { mutableStateOf(loadSavedDays(context)) }
-
-    var showAddDialog by remember { mutableStateOf(false) }
-    var dateInput by remember { mutableStateOf("") }
-    var noteInput by remember { mutableStateOf("") }
-    var typeInput by remember { mutableStateOf("Holiday") }
-    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
     var syncMessage by remember { mutableStateOf("") }
     var autoSyncAttempted by remember { mutableStateOf(false) }
 
@@ -116,6 +109,39 @@ fun HolidayCalendarScreen(onBack: () -> Unit) {
             syncHolidays(isAutoSync = true)
         }
     }
+
+    HolidayCalendarScreenContent(
+        days = days,
+        syncMessage = syncMessage,
+        onBack = onBack,
+        onAddDay = { date, type, note ->
+            val (merged, _) = mergeDays(days, listOf(AcademicDay(date, type, note)))
+            days = merged
+        },
+        onSyncHolidays = {
+            if (!hasCalendarPermission) {
+                permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+            } else {
+                syncHolidays(isAutoSync = false)
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HolidayCalendarScreenContent(
+    days: List<AcademicDay>,
+    syncMessage: String,
+    onBack: () -> Unit,
+    onAddDay: (String, String, String) -> Unit,
+    onSyncHolidays: () -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+    var dateInput by remember { mutableStateOf("") }
+    var noteInput by remember { mutableStateOf("") }
+    var typeInput by remember { mutableStateOf("Holiday") }
+    var currentMonth by remember { mutableStateOf(YearMonth.now()) }
 
     Scaffold(
         topBar = {
@@ -155,13 +181,7 @@ fun HolidayCalendarScreen(onBack: () -> Unit) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    onClick = {
-                        if (!hasCalendarPermission) {
-                            permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-                        } else {
-                            syncHolidays(isAutoSync = false)
-                        }
-                    },
+                    onClick = onSyncHolidays,
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("Sync Holidays")
@@ -249,17 +269,7 @@ fun HolidayCalendarScreen(onBack: () -> Unit) {
                     onClick = {
                         val parsedDate = runCatching { LocalDate.parse(dateInput.trim()) }.getOrNull()
                         if (parsedDate != null && typeInput.isNotBlank() && noteInput.isNotBlank()) {
-                            val (merged, _) = mergeDays(
-                                days,
-                                listOf(
-                                    AcademicDay(
-                                date = parsedDate.toString(),
-                                type = typeInput.trim(),
-                                note = noteInput.trim()
-                                    )
-                                )
-                            )
-                            days = merged
+                            onAddDay(parsedDate.toString(), typeInput.trim(), noteInput.trim())
                             dateInput = ""
                             noteInput = ""
                             typeInput = "Holiday"
@@ -504,7 +514,15 @@ private const val HOLIDAY_DATA_KEY = "holiday_days_json"
 @Composable
 private fun HolidayCalendarScreenPreview() {
     ProximaTheme {
-        HolidayCalendarScreen(onBack = {})
+        HolidayCalendarScreenContent(
+            days = listOf(
+                AcademicDay("2024-01-01", "Holiday", "New Year's Day"),
+                AcademicDay("2024-01-26", "Holiday", "Republic Day")
+            ),
+            syncMessage = "Ready",
+            onBack = {},
+            onAddDay = { _, _, _ -> },
+            onSyncHolidays = {}
+        )
     }
 }
-

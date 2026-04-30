@@ -28,7 +28,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sirius.proxima.ui.theme.ProximaTheme
 import com.sirius.proxima.viewmodel.AcademicToolsViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreditTrackerScreen(
     onBack: () -> Unit,
@@ -39,6 +38,24 @@ fun CreditTrackerScreen(
     val completedCredits by viewModel.completedCredits.collectAsStateWithLifecycle()
     val requiredCredits by viewModel.requiredCredits.collectAsStateWithLifecycle()
 
+    CreditTrackerScreenContent(
+        completedCredits = completedCredits,
+        requiredCredits = requiredCredits,
+        onBack = onBack,
+        onCompletedCreditsChange = { viewModel.setCompletedCredits(it) },
+        onRequiredCreditsChange = { viewModel.setRequiredCredits(it) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreditTrackerScreenContent(
+    completedCredits: String,
+    requiredCredits: String,
+    onBack: () -> Unit,
+    onCompletedCreditsChange: (String) -> Unit,
+    onRequiredCreditsChange: (String) -> Unit
+) {
     val completed = completedCredits.toFloatOrNull() ?: 0f
     val required = requiredCredits.toFloatOrNull() ?: 0f
     val progress = if (required > 0) ((completed / required) * 100f).coerceIn(0f, 100f) else 0f
@@ -65,14 +82,14 @@ fun CreditTrackerScreen(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = completedCredits,
-                onValueChange = { viewModel.setCompletedCredits(it) },
+                onValueChange = onCompletedCreditsChange,
                 label = { Text("Completed credits") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
             )
             OutlinedTextField(
                 value = requiredCredits,
-                onValueChange = { viewModel.setRequiredCredits(it) },
+                onValueChange = onRequiredCreditsChange,
                 label = { Text("Required credits") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
@@ -88,7 +105,12 @@ fun CreditTrackerScreen(
 @Composable
 private fun CreditTrackerScreenPreview() {
     ProximaTheme {
-        CreditTrackerScreen(onBack = {})
+        CreditTrackerScreenContent(
+            completedCredits = "85.5",
+            requiredCredits = "120",
+            onBack = {},
+            onCompletedCreditsChange = {},
+            onRequiredCreditsChange = {}
+        )
     }
 }
-
