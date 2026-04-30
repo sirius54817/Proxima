@@ -72,7 +72,10 @@ class SecurityManager(context: Context) {
     }
 
     fun setAppLockEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean("app_lock_enabled", enabled).apply()
+        prefs.edit()
+            .putBoolean("app_lock_enabled", enabled)
+            .remove("last_unlock_at")
+            .apply()
     }
 
     fun isBiometricEnabled(): Boolean {

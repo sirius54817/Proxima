@@ -3,6 +3,8 @@ package com.sirius.proxima.ui.screen.security
 import android.app.Application
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -73,21 +76,22 @@ fun AppLockScreen(
         if (!BiometricUtils.isBiometricAvailable(context)) {
             error = "Biometric not enrolled or unavailable"
             showPin = true
-            // Optionally prompt to enroll
-            // BiometricUtils.promptEnrollBiometric(context)
             return
         }
+
+        error = null
+        showPin = false
 
         BiometricUtils.showBiometricPrompt(
             activity = activity,
             onSuccess = {
-                error = null
                 onUnlocked()
             },
             onFailure = { err ->
                 error = err
-                // If the user cancels or uses PIN, showPin will be handled by the UI
-                if (err?.contains("cancel", ignoreCase = true) == true) {
+                // If the user cancels or uses PIN, show the PIN entry
+                if (err?.contains("cancel", ignoreCase = true) == true ||
+                    err?.contains("pin", ignoreCase = true) == true) {
                     showPin = true
                 }
             }
@@ -170,7 +174,7 @@ private fun AppLockContent(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = if (showPin) "Enter PIN to continue" else "Authenticating...",
+            text = "Enter PIN to continue",
             color = Color(0xFFA1A1AA),
             fontSize = 14.sp
         )
@@ -220,3 +224,4 @@ fun AppLockScreenPreview() {
         )
     }
 }
+

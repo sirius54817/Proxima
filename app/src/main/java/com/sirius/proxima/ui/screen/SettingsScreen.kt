@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
@@ -19,10 +20,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -69,6 +73,7 @@ fun SettingsScreen(
     val backupDebugLog by viewModel.backupDebugLog.collectAsStateWithLifecycle()
     val showHomeSemesterProgress by viewModel.showHomeSemesterProgress.collectAsStateWithLifecycle()
     val showHomeWeeklyGoalProgress by viewModel.showHomeWeeklyGoalProgress.collectAsStateWithLifecycle()
+    val attendanceThresholdPercent by viewModel.attendanceThresholdPercent.collectAsStateWithLifecycle()
     val appThemeMode by viewModel.appThemeMode.collectAsStateWithLifecycle()
     val useMaterial3 by viewModel.useMaterial3.collectAsStateWithLifecycle()
     val useMaterialYou by viewModel.useMaterialYou.collectAsStateWithLifecycle()
@@ -233,8 +238,10 @@ fun SettingsScreen(
         onClearAllPdfs = { showClearPdfsDialog = true },
         showHomeSemesterProgress = showHomeSemesterProgress,
         showHomeWeeklyGoalProgress = showHomeWeeklyGoalProgress,
+        attendanceThresholdPercent = attendanceThresholdPercent,
         onSetShowHomeSemesterProgress = viewModel::setShowHomeSemesterProgress,
         onSetShowHomeWeeklyGoalProgress = viewModel::setShowHomeWeeklyGoalProgress,
+        onSetAttendanceThresholdPercent = viewModel::setAttendanceThresholdPercent,
         appThemeMode = appThemeMode,
         useMaterial3 = useMaterial3,
         useMaterialYou = useMaterialYou,
@@ -503,8 +510,10 @@ fun SettingsScreenContent(
     onClearAllPdfs: () -> Unit = {},
     showHomeSemesterProgress: Boolean = true,
     showHomeWeeklyGoalProgress: Boolean = true,
+    attendanceThresholdPercent: Int = 75,
     onSetShowHomeSemesterProgress: (Boolean) -> Unit = {},
     onSetShowHomeWeeklyGoalProgress: (Boolean) -> Unit = {},
+    onSetAttendanceThresholdPercent: (Int) -> Unit = {},
     appThemeMode: ThemeMode = ThemeMode.SYSTEM,
     useMaterial3: Boolean = false,
     useMaterialYou: Boolean = false,
@@ -929,6 +938,24 @@ fun SettingsScreenContent(
 
                 SettingsPage.Home -> {
                     item {
+                        var attendanceThresholdInput by rememberSaveable {
+                            mutableStateOf(attendanceThresholdPercent.toString())
+                        }
+                        var attendanceThresholdFocused by remember { mutableStateOf(false) }
+
+                        val saveAttendanceThreshold = {
+                            val parsed = attendanceThresholdInput.toIntOrNull()
+                            val target = (parsed ?: attendanceThresholdPercent).coerceIn(1, 99)
+                            attendanceThresholdInput = target.toString()
+                            if (target != attendanceThresholdPercent) {
+                                onSetAttendanceThresholdPercent(target)
+                            }
+                        }
+
+                        LaunchedEffect(attendanceThresholdPercent) {
+                            attendanceThresholdInput = attendanceThresholdPercent.toString()
+                        }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -977,6 +1004,47 @@ fun SettingsScreenContent(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MutedForeground
                                 )
+
+                                HorizontalDivider(color = Border, thickness = 0.5.dp)
+
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("Attendance threshold")
+                                    Text(
+                                        text = "Current threshold: $attendanceThresholdPercent%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedForeground
+                                    )
+                                    OutlinedTextField(
+                                        value = attendanceThresholdInput,
+                                        onValueChange = { value ->
+                                            if (value.isEmpty() || value.all { it.isDigit() }) {
+                                                attendanceThresholdInput = value
+                                            }
+                                        },
+                                        label = { Text("Color threshold") },
+                                        suffix = { Text("%") },
+                                        singleLine = true,
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                            keyboardType = KeyboardType.Number,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(onDone = { saveAttendanceThreshold() }),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .onFocusChanged { focusState ->
+                                                if (attendanceThresholdFocused && !focusState.isFocused) {
+                                                    saveAttendanceThreshold()
+                                                }
+                                                attendanceThresholdFocused = focusState.isFocused
+                                            }
+                                    )
+                                    Text(
+                                        text = "Enter a value from 1 to 99. It saves when you finish typing.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedForeground
+                                    )
+                                }
 
                                 HorizontalDivider(color = Border, thickness = 0.5.dp)
 
@@ -1226,6 +1294,14 @@ fun SettingsScreenContent(
                                     )
                                 }
 
+                                if (hasPin) {
+                                    Text(
+                                        text = "Current timeout: $timeoutLabel",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MutedForeground
+                                    )
+                                }
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1244,14 +1320,6 @@ fun SettingsScreenContent(
                                         checked = biometricEnabled,
                                         onCheckedChange = onSetBiometricEnabled,
                                         enabled = appLockEnabled
-                                    )
-                                }
-
-                                if (hasPin) {
-                                    Text(
-                                        text = "Current timeout: $timeoutLabel",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MutedForeground
                                     )
                                 }
 
@@ -1280,7 +1348,7 @@ fun SettingsScreenContent(
                                             onValueChange = {},
                                             readOnly = true,
                                             label = { Text("Ask for password") },
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = RoundedCornerShape(18.dp),
                                             trailingIcon = {
                                                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = timeoutExpanded)
                                             },
@@ -1291,7 +1359,7 @@ fun SettingsScreenContent(
                                         ExposedDropdownMenu(
                                             expanded = timeoutExpanded,
                                             onDismissRequest = { timeoutExpanded = false },
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = RoundedCornerShape(18.dp)
                                         ) {
                                             timeoutOptions.forEach { option ->
                                                 val optionLabel = if (option == 0) "Every time" else "$option min"

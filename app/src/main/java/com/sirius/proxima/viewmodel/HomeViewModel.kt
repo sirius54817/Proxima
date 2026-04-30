@@ -114,6 +114,9 @@ class HomeViewModel(
     val showWeeklyGoalProgress: StateFlow<Boolean> = settingsDataStore.showHomeWeeklyGoalProgress
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val attendanceThresholdPercent: StateFlow<Int> = settingsDataStore.attendanceThresholdPercent
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 75)
+
     val weeklyGoalMinutes: StateFlow<Int> = settingsDataStore.weeklyStudyGoalMinutes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 600)
 

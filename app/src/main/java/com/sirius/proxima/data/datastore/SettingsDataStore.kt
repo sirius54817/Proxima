@@ -29,6 +29,7 @@ class SettingsDataStore(
         val ACADEMIC_PREVIOUS_CREDITS = stringPreferencesKey("academic_previous_credits")
         val ACADEMIC_COMPLETED_CREDITS = stringPreferencesKey("academic_completed_credits")
         val ACADEMIC_REQUIRED_CREDITS = stringPreferencesKey("academic_required_credits")
+        val ATTENDANCE_THRESHOLD_PERCENT = intPreferencesKey("attendance_threshold_percent")
         val WEEKLY_STUDY_GOAL_MINUTES = intPreferencesKey("weekly_study_goal_minutes")
         val SEMESTER_START_DATE = stringPreferencesKey("semester_start_date")
         val SEMESTER_END_DATE = stringPreferencesKey("semester_end_date")
@@ -57,6 +58,7 @@ class SettingsDataStore(
     val academicPreviousCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_PREVIOUS_CREDITS] ?: "" }
     val academicCompletedCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_COMPLETED_CREDITS] ?: "" }
     val academicRequiredCredits: Flow<String> = dataStore.data.map { it[ACADEMIC_REQUIRED_CREDITS] ?: "" }
+    val attendanceThresholdPercent: Flow<Int> = dataStore.data.map { it[ATTENDANCE_THRESHOLD_PERCENT] ?: 75 }
     val weeklyStudyGoalMinutes: Flow<Int> = dataStore.data.map { it[WEEKLY_STUDY_GOAL_MINUTES] ?: 600 }
     val semesterStartDate: Flow<String?> = dataStore.data.map { it[SEMESTER_START_DATE] }
     val semesterEndDate: Flow<String?> = dataStore.data.map { it[SEMESTER_END_DATE] }
@@ -127,6 +129,10 @@ class SettingsDataStore(
 
     suspend fun setAcademicRequiredCredits(value: String) {
         dataStore.edit { it[ACADEMIC_REQUIRED_CREDITS] = value }
+    }
+
+    suspend fun setAttendanceThresholdPercent(value: Int) {
+        dataStore.edit { it[ATTENDANCE_THRESHOLD_PERCENT] = value.coerceIn(1, 99) }
     }
 
     suspend fun setWeeklyStudyGoalMinutes(value: Int) {

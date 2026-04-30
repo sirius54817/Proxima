@@ -26,6 +26,27 @@ import com.sirius.proxima.ui.theme.AttendanceRed
 import com.sirius.proxima.ui.theme.Border
 import com.sirius.proxima.ui.theme.MutedForeground
 import com.sirius.proxima.ui.theme.ProximaTheme
+import kotlin.math.ceil
+import kotlin.math.floor
+
+private fun subjectAttendancePercentColor(percentage: Float, thresholdPercent: Int) =
+    if (percentage >= thresholdPercent.toFloat()) AttendanceGreen else AttendanceRed
+
+private fun canMissClasses(attended: Int, total: Int, thresholdPercent: Int): Int {
+    if (total <= 0) return 0
+    if (thresholdPercent <= 0) return 0
+    val raw = ((attended.toFloat() * 100f) - (thresholdPercent.toFloat() * total.toFloat())) / thresholdPercent.toFloat()
+    return floor(raw).toInt().coerceAtLeast(0)
+}
+
+private fun classesNeededToReachThreshold(attended: Int, total: Int, thresholdPercent: Int): Int {
+    if (total <= 0) return 0
+    if (thresholdPercent >= 100) return 0
+    val numerator = (thresholdPercent.toFloat() * total.toFloat()) - (attended.toFloat() * 100f)
+    if (numerator <= 0f) return 0
+    val raw = numerator / (100f - thresholdPercent.toFloat())
+    return ceil(raw).toInt().coerceAtLeast(0)
+}
 
 @Composable
 fun SubjectCard(
@@ -42,12 +63,15 @@ fun SubjectCard(
     isInEditMode: Boolean,
     isSelected: Boolean = false,
     onSelectToggle: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    attendanceThresholdPercent: Int = 75
 ) {
     val isHidden = subject.isHidden
-    val isAbove75 = subject.percentage >= 75f
-    val percentColor = if (isHidden) MutedForeground else if (isAbove75) AttendanceGreen else AttendanceRed
+    val isAboveThreshold = subject.percentage >= attendanceThresholdPercent.toFloat()
+    val percentColor = if (isHidden) MutedForeground else subjectAttendancePercentColor(subject.percentage, attendanceThresholdPercent)
     val strike = if (isHidden) TextDecoration.LineThrough else TextDecoration.None
+    val canMiss = canMissClasses(subject.attendedClasses, subject.totalClasses, attendanceThresholdPercent)
+    val needToAttend = classesNeededToReachThreshold(subject.attendedClasses, subject.totalClasses, attendanceThresholdPercent)
 
     Box(modifier = modifier.fillMaxWidth()) {
         Card(
@@ -88,7 +112,7 @@ fun SubjectCard(
                         Text(
                             text = "${subject.attendedClasses}/${subject.totalClasses} classes • ${"%.1f".format(subject.percentage)}%",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MutedForeground,
+                            color = percentColor,
                             textDecoration = strike
                         )
                     }
@@ -112,12 +136,12 @@ fun SubjectCard(
                 Text(
                     text = if (isHidden) {
                         "Hidden subject. Long-press to delete or tap Unhide to restore."
-                    } else if (isAbove75) {
-                        if (subject.canMissClasses > 0) "You can miss ${subject.canMissClasses} more class${if (subject.canMissClasses > 1) "es" else ""}"
-                        else "You're at exactly 75% — don't miss any!"
+                    } else if (isAboveThreshold) {
+                        if (canMiss > 0) "You can miss $canMiss more class${if (canMiss > 1) "es" else ""}"
+                        else "You're at exactly $attendanceThresholdPercent% — don't miss any!"
                     } else {
-                        if (subject.needToAttendClasses > 0) "Attend ${subject.needToAttendClasses} more class${if (subject.needToAttendClasses > 1) "es" else ""} to reach 75%"
-                        else "Attend more classes to reach 75%"
+                        if (needToAttend > 0) "Attend $needToAttend more class${if (needToAttend > 1) "es" else ""} to reach $attendanceThresholdPercent%"
+                        else "Attend more classes to reach $attendanceThresholdPercent%"
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = percentColor.copy(alpha = 0.8f),
@@ -291,6 +315,7 @@ fun SubjectCardPreview() {
                 totalClasses = 40,
                 attendedClasses = 35
             ),
+            attendanceThresholdPercent = 75,
             onMarkPresent = {},
             onMarkAbsent = {},
             onMarkOnDuty = {},
@@ -316,6 +341,7 @@ fun SubjectCardLowAttendancePreview() {
                 totalClasses = 40,
                 attendedClasses = 25
             ),
+            attendanceThresholdPercent = 75,
             onMarkPresent = {},
             onMarkAbsent = {},
             onMarkOnDuty = {},

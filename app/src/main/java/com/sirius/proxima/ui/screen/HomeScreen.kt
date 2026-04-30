@@ -51,6 +51,7 @@ fun HomeScreen(
     val tomorrowHolidayText by viewModel.tomorrowHolidayText.collectAsStateWithLifecycle()
     val weeklyGoalMinutes by viewModel.weeklyGoalMinutes.collectAsStateWithLifecycle()
     val weeklyStudiedMinutes by viewModel.weeklyStudiedMinutes.collectAsStateWithLifecycle()
+    val attendanceThresholdPercent by viewModel.attendanceThresholdPercent.collectAsStateWithLifecycle()
     val bulkSubjectActionStatus by viewModel.bulkSubjectActionStatus.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -126,6 +127,7 @@ fun HomeScreen(
             onEdit = { editingSubject = it },
             onDelete = { deletingSubject = it },
             onSubjectClick = { onNavigateToSubjectHistory(it.id) },
+            attendanceThresholdPercent = attendanceThresholdPercent,
             examCountdowns = examCountdowns,
             semesterProgress = semesterProgress,
             weekOverview = weekOverview,
@@ -236,6 +238,7 @@ fun HomeScreenContent(
     onEdit: (Subject) -> Unit,
     onDelete: (Subject) -> Unit,
     onSubjectClick: (Subject) -> Unit,
+    attendanceThresholdPercent: Int,
     examCountdowns: List<HomeViewModel.ExamCountdownItem>,
     semesterProgress: Float,
     weekOverview: List<HomeViewModel.HomeWeekEvent>,
@@ -411,7 +414,8 @@ fun HomeScreenContent(
             items(todayEntries, key = { "entry_${it.id}" }) { entry ->
                 TodayEntryCard(
                     entry = entry,
-                    percentage = onGetPercentage(entry.subjectId)
+                    percentage = onGetPercentage(entry.subjectId),
+                    attendanceThresholdPercent = attendanceThresholdPercent
                 )
             }
         }
@@ -519,6 +523,7 @@ fun HomeScreenContent(
             items(visibleSubjects, key = { "subject_${it.id}" }) { subject ->
                 SubjectCard(
                     subject = subject,
+                    attendanceThresholdPercent = attendanceThresholdPercent,
                     onMarkPresent = { onMarkPresent(subject.id) },
                     onMarkAbsent = { onMarkAbsent(subject.id) },
                     onMarkOnDuty = { onMarkOnDuty(subject.id) },
@@ -585,9 +590,11 @@ fun HomeScreenContent(
 fun TodayEntryCard(
     entry: TimetableEntry,
     percentage: Float,
+    attendanceThresholdPercent: Int,
     modifier: Modifier = Modifier
 ) {
     val isDeleted = entry.subjectName == "[Deleted Subject]"
+    val percentColor = if (percentage >= attendanceThresholdPercent.toFloat()) AttendanceGreen else AttendanceRed
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -628,7 +635,6 @@ fun TodayEntryCard(
             }
 
             if (!isDeleted) {
-                val percentColor = if (percentage >= 75f) AttendanceGreen else AttendanceRed
                 Text(
                     text = "${"%.0f".format(percentage)}%",
                     style = MaterialTheme.typography.labelLarge,
@@ -743,6 +749,7 @@ fun HomeScreenContentPreview() {
             onEdit = {},
             onDelete = {},
             onSubjectClick = {},
+            attendanceThresholdPercent = 75,
             examCountdowns = listOf(
                 HomeViewModel.ExamCountdownItem(1, "Math", "2026-04-18", 5),
                 HomeViewModel.ExamCountdownItem(2, "Physics", "2026-04-22", 9)

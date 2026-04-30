@@ -120,6 +120,7 @@ class MainActivity : FragmentActivity() {
         if (securityManager.isAppLockEnabled()) {
             appLockEnabled = true
             // Only lock immediately if timeout is 0 ("Every time")
+            // This ensures the recents preview is the lock screen for privacy.
             if (securityManager.getAppLockTimeoutMinutes() == 0) {
                 isLocked = true
             }
