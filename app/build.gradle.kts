@@ -31,6 +31,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    androidResources {
+        localeFilters += listOf("en")
+    }
+
     signingConfigs {
         create("release") {
             storeFile = rootProject.file("proxima-release.jks")
@@ -49,6 +53,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            // Optimize for size and performance
+            ndk {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            }
         }
     }
     compileOptions {
@@ -75,6 +84,19 @@ android {
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions {
+        freeCompilerArgs.addAll(
+            "-opt-in=kotlin.RequiresOptIn",
+            "-Xjvm-default=all",
+            "-Xbackend-threads=0" // Use all CPU cores for backend (compilation speed)
+        )
+    }
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xbackend-threads=0")
+    }
 }
 
 ksp {
@@ -139,55 +161,4 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-}
-
-// Auto-install debug APK on connected device after every debug build
-afterEvaluate {
-    tasks.named("assembleDebug") {
-        doLast {
-            val apk = file("${layout.buildDirectory.get()}/outputs/apk/debug/app-debug.apk")
-            if (!apk.exists()) {
-                println("⚠️  APK not found: ${apk.absolutePath}")
-                return@doLast
-            }
-            // Resolve adb path: local.properties → ANDROID_HOME → ANDROID_SDK_ROOT
-            val localPropsFile = rootProject.file("local.properties")
-            val sdkDir = if (localPropsFile.exists()) {
-                localPropsFile.readLines()
-                    .firstOrNull { it.startsWith("sdk.dir=") }
-                    ?.substringAfter("sdk.dir=")
-                    ?.trim()
-            } else null
-                ?: System.getenv("ANDROID_HOME")
-                ?: System.getenv("ANDROID_SDK_ROOT")
-
-            if (sdkDir == null) {
-                println("⚠️  Cannot find Android SDK. Set sdk.dir in local.properties.")
-                return@doLast
-            }
-            val adb = "$sdkDir/platform-tools/adb"
-            println(" Installing ${apk.name} on connected device...")
-            val proc = ProcessBuilder(adb, "install", "-r", "-d", apk.absolutePath)
-                .redirectErrorStream(true)
-                .start()
-            val output = proc.inputStream.bufferedReader().readText().trim()
-            val exitCode = proc.waitFor()
-            if (output.isNotEmpty()) println(output)
-            if (exitCode == 0) {
-                println("✅ APK installed successfully.")
-            } else {
-                // Signature mismatch — uninstall then re-install
-                println(" Signature mismatch — uninstalling old version and retrying...")
-                ProcessBuilder(adb, "uninstall", "com.sirius.proxima")
-                    .redirectErrorStream(true).start().waitFor()
-                val proc2 = ProcessBuilder(adb, "install", "-r", "-d", apk.absolutePath)
-                    .redirectErrorStream(true).start()
-                val out2 = proc2.inputStream.bufferedReader().readText().trim()
-                val exit2 = proc2.waitFor()
-                if (out2.isNotEmpty()) println(out2)
-                if (exit2 == 0) println("✅ APK installed successfully.")
-                else println("⚠️  ADB install failed (exit $exit2). Is a device/emulator connected?")
-            }
-        }
-    }
 }
